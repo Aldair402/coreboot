@@ -1,55 +1,29 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <bootstate.h>
 #include <console/console.h>
 #include <device/device.h>
 #include <device/pnp.h>
 #include <ec/acpi/ec.h>
 #include <option.h>
-#include <pc80/mc146818rtc.h>
-#include <halt.h>
-
 #include "ecdefs.h"
-#include "option_table.h"
 #include "ec.h"
 
-#define ITE_IT5570	0x5570
-#define ITE_IT8987	0x8987
+#define ITE_IT5570 0x5570
+#define ITE_IT8987 0x8987
 
 uint16_t ec_get_version(void)
 {
 	return (ec_read(ECRAM_MAJOR_VERSION) << 8) | ec_read(ECRAM_MINOR_VERSION);
 }
 
-static uint8_t get_cmos_value(uint32_t bit, uint32_t length)
+static uint8_t get_ec_value_from_option(const char *name, uint8_t fallback, const uint8_t *lut,
+					size_t lut_size)
 {
-	uint32_t byte, byte_bit;
-	uint8_t uchar;
-
-	byte = bit / 8; // find the byte where the data starts
-	byte_bit = bit % 8; // find the bit in the byte where the data starts
-
-	uchar = cmos_read(byte); // load the byte
-	uchar >>= byte_bit;     // shift the bits to byte align
-	// clear unspecified bits
-	return uchar & ((1U << length) - 1);
-}
-
-static uint8_t get_ec_value_from_option(const char *name,
-					uint32_t fallback,
-					const uint8_t *lut,
-					size_t lut_size,
-					uint32_t cmos_start_bit,
-					uint32_t cmos_length)
-{
-	uint8_t value;
-
-	if (cmos_start_bit != UINT_MAX)
-		value = get_cmos_value(cmos_start_bit, cmos_length);
-	else
-		value = get_uint_option(name, fallback);
+	const uint8_t value = get_uint_option(name, fallback);
 
 	/* Check if the value exists in the LUT array */
-	for (int i = 0; i < lut_size; i++)
+	for (size_t i = 0; i < lut_size; i++)
 		if (lut[i] == value)
 			return value;
 
@@ -58,28 +32,14 @@ static uint8_t get_ec_value_from_option(const char *name,
 
 static uint16_t ec_get_chip_id(unsigned int port)
 {
-	return (pnp_read_index(port, ITE_CHIPID1) << 8) |
-		pnp_read_index(port, ITE_CHIPID2);
+	return (pnp_read_index(port, ITE_CHIPID1) << 8) | pnp_read_index(port, ITE_CHIPID2);
 }
 
-static void merlin_init(struct device *dev)
+static void merlin_restore_options(void *unused)
 {
-	if (!dev->enabled)
-		return;
+	(void)unused;
 
-	/*
-	 * The address/data IO port pair for the ite EC are configurable
-	 * through the EC domain and are fixed by the EC's firmware blob. If
-	 * the value(s) passed through the "dev" structure don't match the
-	 * expected values then output severe warnings.
-	 */
-	if (dev->path.pnp.port != ITE_FIXED_ADDR) {
-		printk(BIOS_ERR, "ITE: Incorrect ports defined in devicetree.cb.\n");
-		printk(BIOS_ERR, "ITE: Serious operational issues will arise.\n");
-		return;
-	}
-
-	const uint16_t chip_id = ec_get_chip_id(dev->path.pnp.port);
+	const uint16_t chip_id = ec_get_chip_id(ITE_FIXED_ADDR);
 
 	if (chip_id != ITE_IT5570 && chip_id != ITE_IT8987) {
 		printk(BIOS_ERR, "ITE: Unsupported chip ID 0x%04x.\n", chip_id);
@@ -87,7 +47,7 @@ static void merlin_init(struct device *dev)
 	}
 
 	/*
-	 * Restore settings from CMOS into EC RAM:
+	 * Restore settings from options into EC RAM:
 	 *
 	 * kbl_timeout
 	 * fn_ctrl_swap
@@ -111,21 +71,11 @@ static void merlin_init(struct device *dev)
 	 * Default:	30 Seconds
 	 *
 	 */
-	const uint8_t kbl_timeout[] = {
-		SEC_30,
-		MIN_1,
-		MIN_3,
-		MIN_5,
-		NEVER
-	};
+	const uint8_t kbl_timeout[] = {SEC_30, MIN_1, MIN_3, MIN_5, NEVER};
 
 	ec_write(ECRAM_KBL_TIMEOUT,
-		get_ec_value_from_option("kbl_timeout",
-					 SEC_30,
-					 kbl_timeout,
-					 ARRAY_SIZE(kbl_timeout),
-					 UINT_MAX,
-					 UINT_MAX));
+		 get_ec_value_from_option("kbl_timeout", SEC_30, kbl_timeout,
+					  ARRAY_SIZE(kbl_timeout)));
 
 	/*
 	 * Fn Ctrl Reverse
@@ -136,18 +86,11 @@ static void merlin_init(struct device *dev)
 	 * Default:	Disabled
 	 *
 	 */
-	const uint8_t fn_ctrl_swap[] = {
-		FN_CTRL,
-		CTRL_FN
-	};
+	const uint8_t fn_ctrl_swap[] = {FN_CTRL, CTRL_FN};
 
 	ec_write(ECRAM_FN_CTRL_REVERSE,
-		get_ec_value_from_option("fn_ctrl_swap",
-					 FN_CTRL,
-					 fn_ctrl_swap,
-					 ARRAY_SIZE(fn_ctrl_swap),
-					 UINT_MAX,
-					 UINT_MAX));
+		 get_ec_value_from_option("fn_ctrl_swap", FN_CTRL, fn_ctrl_swap,
+					  ARRAY_SIZE(fn_ctrl_swap)));
 
 	/*
 	 * Maximum Charge Level
@@ -158,20 +101,12 @@ static void merlin_init(struct device *dev)
 	 * Default:	100%
 	 *
 	 */
-	const uint8_t max_charge[] = {
-		CHARGE_100,
-		CHARGE_80,
-		CHARGE_60
-	};
+	const uint8_t max_charge[] = {CHARGE_100, CHARGE_80, CHARGE_60};
 
 	if (CONFIG(EC_STARLABS_MAX_CHARGE))
 		ec_write(ECRAM_MAX_CHARGE,
-			get_ec_value_from_option("max_charge",
-						 CHARGE_100,
-						 max_charge,
-						 ARRAY_SIZE(max_charge),
-						 UINT_MAX,
-						 UINT_MAX));
+			 get_ec_value_from_option("max_charge", CHARGE_100, max_charge,
+						  ARRAY_SIZE(max_charge)));
 
 	/*
 	 * Fan Mode
@@ -182,21 +117,12 @@ static void merlin_init(struct device *dev)
 	 * Default:	Normal
 	 *
 	 */
-	const uint8_t fan_mode[] = {
-		FAN_NORMAL,
-		FAN_AGGRESSIVE,
-		FAN_QUIET,
-		FAN_DISABLED
-	};
+	const uint8_t fan_mode[] = {FAN_NORMAL, FAN_AGGRESSIVE, FAN_QUIET, FAN_DISABLED};
 
 	if (CONFIG(EC_STARLABS_FAN))
 		ec_write(ECRAM_FAN_MODE,
-			get_ec_value_from_option("fan_mode",
-						 FAN_NORMAL,
-						 fan_mode,
-						 ARRAY_SIZE(fan_mode),
-						 UINT_MAX,
-						 UINT_MAX));
+			 get_ec_value_from_option("fan_mode", FAN_NORMAL, fan_mode,
+						  ARRAY_SIZE(fan_mode)));
 
 	/*
 	 * Function Lock
@@ -207,20 +133,11 @@ static void merlin_init(struct device *dev)
 	 * Default:	Locked
 	 *
 	 */
-#ifdef CMOS_VLEN_fn_lock_state
-	const uint8_t fn_lock_state[] = {
-		UNLOCKED,
-		LOCKED
-	};
+	const uint8_t fn_lock_state[] = {UNLOCKED, LOCKED};
 
 	ec_write(ECRAM_FN_LOCK_STATE,
-		get_ec_value_from_option("fn_lock_state",
-					 UNLOCKED,
-					 fn_lock_state,
-					 ARRAY_SIZE(fn_lock_state),
-					 CMOS_VSTART_fn_lock_state,
-					 CMOS_VLEN_fn_lock_state));
-#endif
+		 get_ec_value_from_option(
+			 "fn_lock_state", UNLOCKED, fn_lock_state, ARRAY_SIZE(fn_lock_state)));
 
 	/*
 	 * Trackpad State
@@ -231,20 +148,12 @@ static void merlin_init(struct device *dev)
 	 * Default:	Enabled
 	 *
 	 */
-#ifdef CMOS_VSTART_trackpad_state
-	const uint8_t trackpad_state[] = {
-		TRACKPAD_ENABLED,
-		TRACKPAD_DISABLED
-	};
+	const uint8_t trackpad_state[] = {TRACKPAD_ENABLED, TRACKPAD_DISABLED};
 
 	ec_write(ECRAM_TRACKPAD_STATE,
-		get_ec_value_from_option("trackpad_state",
-					 TRACKPAD_ENABLED,
-					 trackpad_state,
-					 ARRAY_SIZE(trackpad_state),
-					 CMOS_VSTART_trackpad_state,
-					 CMOS_VLEN_trackpad_state));
-#endif
+		 get_ec_value_from_option(
+			 "trackpad_state", TRACKPAD_ENABLED, trackpad_state,
+			 ARRAY_SIZE(trackpad_state)));
 
 	/*
 	 * Keyboard Backlight Brightness
@@ -255,24 +164,16 @@ static void merlin_init(struct device *dev)
 	 * Default:	Low
 	 *
 	 */
-#ifdef CMOS_VSTART_kbl_brightness
-	const uint8_t kbl_brightness[] = {
-		KBL_ON,
-		KBL_OFF,
-		KBL_LOW,
-		KBL_HIGH
-	};
+	const uint8_t kbl_brightness[] = {KBL_ON, KBL_OFF, KBL_LOW, KBL_HIGH};
+
+	const uint8_t kbl_brightness_fallback =
+		CONFIG(EC_STARLABS_KBL_LEVELS) ? KBL_LOW : KBL_ON;
 
 	ec_write(ECRAM_KBL_BRIGHTNESS,
-		get_ec_value_from_option("kbl_brightness",
-			CONFIG(EC_STARLABS_KBL_LEVELS) ? KBL_LOW : KBL_ON,
-			kbl_brightness,
-			ARRAY_SIZE(kbl_brightness),
-			CMOS_VSTART_kbl_brightness,
-			CMOS_VLEN_kbl_brightness));
-
-#endif
-
+		 get_ec_value_from_option(
+			 "kbl_brightness",
+			 kbl_brightness_fallback,
+			 kbl_brightness, ARRAY_SIZE(kbl_brightness)));
 
 	/*
 	 * Keyboard Backlight State
@@ -297,20 +198,12 @@ static void merlin_init(struct device *dev)
 	 * Default:	0.5C
 	 *
 	 */
-	const uint8_t charging_speed[] = {
-		SPEED_1_0C,
-		SPEED_0_5C,
-		SPEED_0_2C
-	};
+	const uint8_t charging_speed[] = {SPEED_1_0C, SPEED_0_5C, SPEED_0_2C};
 
 	if (CONFIG(EC_STARLABS_CHARGING_SPEED))
 		ec_write(ECRAM_CHARGING_SPEED,
-			get_ec_value_from_option("charging_speed",
-				SPEED_0_5C,
-				charging_speed,
-				ARRAY_SIZE(charging_speed),
-				UINT_MAX,
-				UINT_MAX));
+			 get_ec_value_from_option("charging_speed", SPEED_0_5C, charging_speed,
+						  ARRAY_SIZE(charging_speed)));
 
 	/*
 	 * Lid Switch
@@ -321,20 +214,12 @@ static void merlin_init(struct device *dev)
 	 * Default:	0
 	 *
 	 */
-	const uint8_t lid_switch[] = {
-		SWITCH_NORMAL,
-		SWITCH_SLEEP_ONLY,
-		SWITCH_DISABLED
-	};
+	const uint8_t lid_switch[] = {SWITCH_NORMAL, SWITCH_SLEEP_ONLY, SWITCH_DISABLED};
 
 	if (CONFIG(EC_STARLABS_LID_SWITCH))
 		ec_write(ECRAM_LID_SWITCH,
-			get_ec_value_from_option("lid_switch",
-				SWITCH_NORMAL,
-				lid_switch,
-				ARRAY_SIZE(lid_switch),
-				UINT_MAX,
-				UINT_MAX));
+			 get_ec_value_from_option("lid_switch", SWITCH_NORMAL, lid_switch,
+						  ARRAY_SIZE(lid_switch)));
 
 	/*
 	 * Power LED Brightness
@@ -345,20 +230,12 @@ static void merlin_init(struct device *dev)
 	 * Default:	0
 	 *
 	 */
-	const uint8_t led_brightness[] = {
-		LED_NORMAL,
-		LED_REDUCED,
-		LED_OFF
-	};
+	const uint8_t led_brightness[] = {LED_NORMAL, LED_REDUCED, LED_OFF};
 
 	if (CONFIG(EC_STARLABS_POWER_LED))
 		ec_write(ECRAM_POWER_LED,
-			get_ec_value_from_option("power_led",
-				LED_NORMAL,
-				led_brightness,
-				ARRAY_SIZE(led_brightness),
-				UINT_MAX,
-				UINT_MAX));
+			 get_ec_value_from_option("power_led", LED_NORMAL, led_brightness,
+						  ARRAY_SIZE(led_brightness)));
 
 	/*
 	 * Charge LED Brightness
@@ -372,18 +249,14 @@ static void merlin_init(struct device *dev)
 
 	if (CONFIG(EC_STARLABS_CHARGE_LED))
 		ec_write(ECRAM_CHARGE_LED,
-			get_ec_value_from_option("charge_led",
-				LED_NORMAL,
-				led_brightness,
-				ARRAY_SIZE(led_brightness),
-				UINT_MAX,
-				UINT_MAX));
+			 get_ec_value_from_option("charge_led", LED_NORMAL, led_brightness,
+						  ARRAY_SIZE(led_brightness)));
 }
+BOOT_STATE_INIT_ENTRY(BS_DEV_INIT, BS_ON_ENTRY, merlin_restore_options, NULL);
 
 static struct device_operations ops = {
-	.init		= merlin_init,
-	.read_resources	= noop_read_resources,
-	.set_resources	= noop_set_resources,
+	.read_resources = noop_read_resources,
+	.set_resources = noop_set_resources,
 };
 
 static struct pnp_info pnp_dev_info[] = {

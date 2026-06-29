@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <amdblocks/backup_boot_device.h>
 #include <amdblocks/spi.h>
 #include <boot_device.h>
 #include <commonlib/region.h>
@@ -32,43 +33,16 @@ static const char *id_to_region_name(uint64_t target_nv_id)
 	return NULL;
 }
 
-/*
- * Do not cache the location to cope with flash changing underneath (e.g. due
- * to an update)
- */
-static int lookup_store(uint64_t target_nv_id, struct region_device *rstore)
+static enum mbox_p2c_status get_flash_device(const enum boot_device boot_device,
+					     const struct spi_flash **flash)
 {
-	/* read_rdev, write_rdev and store_irdev need to be static to not go out of scope when
-	   this function returns */
-	static struct region_device read_rdev, write_rdev;
-	static struct incoherent_rdev store_irdev;
-	const char *name;
-	struct region region;
-	const struct region_device *rdev;
+	if (boot_device == FLASH_PRIMARY)
+		*flash = boot_device_spi_flash();
+	else if (CONFIG(SOC_AMD_COMMON_BLOCK_SPI_BACKUP_SPI_FLASH))
+		*flash = backup_boot_device_spi_flash();
+	else
+		return MBOX_PSP_INVALID_PARAMETER;
 
-	name = id_to_region_name(target_nv_id);
-	if (!name)
-		return -1;
-
-	if (fmap_locate_area(name, &region) < 0)
-		return -1;
-
-	if (boot_device_ro_subregion(&region, &read_rdev) < 0)
-		return -1;
-
-	if (boot_device_rw_subregion(&region, &write_rdev) < 0)
-		return -1;
-
-	rdev = incoherent_rdev_init(&store_irdev, &region, &read_rdev, &write_rdev);
-	if (rdev == NULL)
-		return -1;
-
-	return rdev_chain(rstore, rdev, 0, region_device_sz(rdev));
-}
-
-static enum mbox_p2c_status get_flash_device(const struct spi_flash **flash)
-{
-	*flash = boot_device_spi_flash();
 	if (*flash == NULL) {
 		printk(BIOS_ERR, "PSP: Unable to find SPI device\n");
 		return MBOX_PSP_COMMAND_PROCESS_ERROR;
@@ -77,16 +51,51 @@ static enum mbox_p2c_status get_flash_device(const struct spi_flash **flash)
 	return MBOX_PSP_SUCCESS;
 }
 
-static enum mbox_p2c_status find_psp_spi_flash_device_region(uint64_t target_nv_id,
+static enum mbox_p2c_status find_psp_spi_flash_device_region(const enum boot_device boot_device,
+							     uint64_t target_nv_id,
 							     struct region_device *store,
 							     const struct spi_flash **flash)
 {
-	if (get_flash_device(flash) != MBOX_PSP_SUCCESS)
+	static struct region_device read_rdev, write_rdev;
+	static struct incoherent_rdev store_irdev;
+	const struct region_device *rdev;
+	const char *name;
+	struct region region;
+
+	if (get_flash_device(boot_device, flash) != MBOX_PSP_SUCCESS)
 		return MBOX_PSP_COMMAND_PROCESS_ERROR;
 
-	if (lookup_store(target_nv_id, store) < 0) {
-		printk(BIOS_ERR, "PSP: Unable to find PSP SPI region\n");
+	name = id_to_region_name(target_nv_id);
+	if (!name)
 		return MBOX_PSP_COMMAND_PROCESS_ERROR;
+
+	if (fmap_locate_area(name, &region) < 0)
+		return MBOX_PSP_COMMAND_PROCESS_ERROR;
+
+	if (boot_device == FLASH_PRIMARY) {
+		if (boot_device_ro_subregion(&region, &read_rdev) < 0)
+			return MBOX_PSP_COMMAND_PROCESS_ERROR;
+
+		if (boot_device_rw_subregion(&region, &write_rdev) < 0)
+			return MBOX_PSP_COMMAND_PROCESS_ERROR;
+
+		rdev = incoherent_rdev_init(&store_irdev, &region, &read_rdev, &write_rdev);
+		if (rdev == NULL)
+			return MBOX_PSP_COMMAND_PROCESS_ERROR;
+
+		return rdev_chain(store, rdev, 0, region_device_sz(rdev));
+
+	} else if (CONFIG(SOC_AMD_COMMON_BLOCK_SPI_BACKUP_SPI_FLASH)) {
+		/*
+		 * FIXME: No backup_boot_device_ro_subregion() implementation yet, so use
+		 * the rw one for both read and write. This is slower!
+		 */
+		if (backup_boot_device_rw_subregion(&region, &write_rdev) < 0)
+			return MBOX_PSP_COMMAND_PROCESS_ERROR;
+
+		return rdev_chain(store, &write_rdev, 0, region_device_sz(&write_rdev));
+	} else {
+		return MBOX_PSP_INVALID_PARAMETER;
 	}
 
 	return MBOX_PSP_SUCCESS;
@@ -138,6 +147,20 @@ static bool spi_controller_busy(void)
 				busy = true;
 		}
 	}
+	if (CONFIG(SOC_AMD_COMMON_BLOCK_SPI_BACKUP_SPI_FLASH) && !busy) {
+		const struct spi_flash *spi_flash_dev;
+		uint8_t sr1 = 0;
+
+		spi_flash_dev = backup_boot_device_spi_flash();
+		assert(spi_flash_dev);
+		if (spi_flash_dev) {
+			/* Read Status Register 1 */
+			if (spi_flash_status(spi_flash_dev, &sr1) < 0)
+				busy = true;
+			else if (sr1 & BIT(0))
+				busy = true;
+		}
+	}
 
 	if (CONFIG(SOC_AMD_PICASSO) && !busy) {
 		// Only implemented on Picasso and Raven Ridge
@@ -172,7 +195,7 @@ enum mbox_p2c_status psp_smi_spi_get_info(struct mbox_default_buffer *buffer)
 
 	target_nv_id = get_psp_spi_info_id(cmd_buf);
 
-	ret = find_psp_spi_flash_device_region(target_nv_id, &store, &flash);
+	ret = find_psp_spi_flash_device_region(FLASH_PRIMARY, target_nv_id, &store, &flash);
 
 	if (ret != MBOX_PSP_SUCCESS)
 		return ret;
@@ -220,7 +243,7 @@ enum mbox_p2c_status psp_smi_spi_read(struct mbox_default_buffer *buffer)
 		return MBOX_PSP_COMMAND_PROCESS_ERROR;
 	}
 
-	ret = find_psp_spi_flash_device_region(target_nv_id, &store, &flash);
+	ret = find_psp_spi_flash_device_region(FLASH_PRIMARY, target_nv_id, &store, &flash);
 
 	if (ret != MBOX_PSP_SUCCESS)
 		return ret;
@@ -268,12 +291,27 @@ enum mbox_p2c_status psp_smi_spi_write(struct mbox_default_buffer *buffer)
 		return MBOX_PSP_COMMAND_PROCESS_ERROR;
 	}
 
-	ret = find_psp_spi_flash_device_region(target_nv_id, &store, &flash);
+	ret = find_psp_spi_flash_device_region(FLASH_PRIMARY, target_nv_id, &store, &flash);
 
 	if (ret != MBOX_PSP_SUCCESS)
 		return ret;
 
 	addr = (lba * flash->sector_size) + offset;
+
+	printk(BIOS_SPEW, "PSP: SPI write 0x%llx bytes at 0x%zx\n", num_bytes, addr);
+
+	if (rdev_writeat(&store, data, addr, (size_t)num_bytes) != (size_t)num_bytes) {
+		printk(BIOS_ERR, "PSP: Failed to write NVRAM data\n");
+		return MBOX_PSP_COMMAND_PROCESS_ERROR;
+	}
+
+	if (!CONFIG(SOC_AMD_COMMON_BLOCK_SPI_BACKUP_SPI_FLASH))
+		return MBOX_PSP_SUCCESS;
+
+	ret = find_psp_spi_flash_device_region(FLASH_BACKUP, target_nv_id, &store, &flash);
+
+	if (ret != MBOX_PSP_SUCCESS)
+		return ret;
 
 	printk(BIOS_SPEW, "PSP: SPI write 0x%llx bytes at 0x%zx\n", num_bytes, addr);
 
@@ -309,13 +347,28 @@ enum mbox_p2c_status psp_smi_spi_erase(struct mbox_default_buffer *buffer)
 
 	get_psp_spi_erase(cmd_buf, &target_nv_id, &lba, &num_blocks);
 
-	ret = find_psp_spi_flash_device_region(target_nv_id, &store, &flash);
+	ret = find_psp_spi_flash_device_region(FLASH_PRIMARY, target_nv_id, &store, &flash);
 
 	if (ret != MBOX_PSP_SUCCESS)
 		return ret;
 
 	addr = lba * flash->sector_size;
 	num_bytes = (size_t)num_blocks * flash->sector_size;
+
+	printk(BIOS_SPEW, "PSP: SPI erase 0x%zx bytes at 0x%zx\n", num_bytes, addr);
+
+	if (rdev_eraseat(&store, addr, num_bytes) != num_bytes) {
+		printk(BIOS_ERR, "PSP: Failed to erase SPI NVRAM data\n");
+		return MBOX_PSP_COMMAND_PROCESS_ERROR;
+	}
+
+	if (!CONFIG(SOC_AMD_COMMON_BLOCK_SPI_BACKUP_SPI_FLASH))
+		return MBOX_PSP_SUCCESS;
+
+	ret = find_psp_spi_flash_device_region(FLASH_BACKUP, target_nv_id, &store, &flash);
+
+	if (ret != MBOX_PSP_SUCCESS)
+		return ret;
 
 	printk(BIOS_SPEW, "PSP: SPI erase 0x%zx bytes at 0x%zx\n", num_bytes, addr);
 
@@ -342,11 +395,22 @@ enum mbox_p2c_status psp_smi_spi_rpmc_inc_mc(struct mbox_default_buffer *buffer)
 		return MBOX_PSP_SPI_BUSY;
 	}
 
-	if (get_flash_device(&flash) != MBOX_PSP_SUCCESS)
+	if (get_flash_device(FLASH_PRIMARY, &flash) != MBOX_PSP_SUCCESS)
 		return MBOX_PSP_COMMAND_PROCESS_ERROR;
 
 	if (spi_flash_rpmc_increment(flash, cmd_buf->req.counter_address,
 				     cmd_buf->req.counter_data, cmd_buf->req.signature)
+			!= CB_SUCCESS)
+		return MBOX_PSP_COMMAND_PROCESS_ERROR;
+
+	if (!CONFIG(SOC_AMD_COMMON_BLOCK_SPI_BACKUP_SPI_FLASH))
+		return MBOX_PSP_SUCCESS;
+
+	if (get_flash_device(FLASH_BACKUP, &flash) != MBOX_PSP_SUCCESS)
+		return MBOX_PSP_COMMAND_PROCESS_ERROR;
+
+	if (spi_flash_rpmc_increment(flash, cmd_buf->req.counter_address,
+				cmd_buf->req.counter_data, cmd_buf->req.signature)
 			!= CB_SUCCESS)
 		return MBOX_PSP_COMMAND_PROCESS_ERROR;
 
@@ -368,7 +432,7 @@ enum mbox_p2c_status psp_smi_spi_rpmc_req_mc(struct mbox_default_buffer *buffer)
 		return MBOX_PSP_SPI_BUSY;
 	}
 
-	if (get_flash_device(&flash) != MBOX_PSP_SUCCESS)
+	if (get_flash_device(FLASH_PRIMARY, &flash) != MBOX_PSP_SUCCESS)
 		return MBOX_PSP_COMMAND_PROCESS_ERROR;
 
 	if (spi_flash_rpmc_request(flash, cmd_buf->req.counter_address, cmd_buf->req.tag,

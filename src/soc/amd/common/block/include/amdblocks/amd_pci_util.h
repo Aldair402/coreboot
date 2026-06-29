@@ -67,9 +67,12 @@ const struct pci_routing_info *get_pci_routing_table(size_t *entries);
 
 const struct pci_routing_info *get_pci_routing_info(unsigned int devfn);
 
+unsigned int soc_get_gsi_base(const struct device *dev);
+
 unsigned int pci_calculate_irq(const struct pci_routing_info *routing_info, unsigned int pin);
 
 void acpigen_write_pci_GNB_PRT(const struct device *dev);
 void acpigen_write_pci_FCH_PRT(const struct device *dev);
+void acpigen_write_pci_root_PRT(void);
 
 #endif /* AMD_BLOCK_PCI_UTIL_H */

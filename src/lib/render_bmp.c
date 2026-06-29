@@ -10,6 +10,8 @@
 
 #include "render_bmp.h"
 
+#define MAX_SPLASH_TEXT_WIDTH 32
+
 static bool is_bmp_image_valid(struct bmp_image_header *header)
 {
 	/* Check if the BMP Header Signature is valid */
@@ -487,7 +489,7 @@ void convert_bmp_to_blt(uintptr_t logo, size_t logo_size,
  * Returning `struct logo_coordinates` that contains the calculated x and y coordinates
  * for rendering the logo.
  */
-static struct logo_coordinates calculate_logo_coordinates(
+struct logo_coordinates calculate_logo_coordinates(
 	uint32_t horizontal_resolution, uint32_t vertical_resolution,
 	uint32_t logo_width, uint32_t logo_height,
 	enum fw_splash_horizontal_alignment halignment,
@@ -576,7 +578,8 @@ static void get_logo_layout(
 	if (!config || !logo_halignment || !logo_valignment || !logo_bottom_margin)
 		return;
 
-	if (logo_type == BOOTSPLASH_LOW_BATTERY || logo_type == BOOTSPLASH_CENTER) {
+	if (logo_type == BOOTSPLASH_LOW_BATTERY || logo_type == BOOTSPLASH_CENTER ||
+			logo_type == BOOTSPLASH_OFF_MODE_CHARGING) {
 		*logo_halignment = config->halignment;
 		*logo_valignment = config->valignment;
 		/* Override logo alignment if the default screen orientation is not normal */
@@ -706,6 +709,31 @@ void render_logo_to_framebuffer(struct logo_config *config)
 	if (platform_is_low_battery_shutdown_needed()) {
 		if (load_and_render_logo_to_framebuffer(BOOTSPLASH_LOW_BATTERY, config) != 0) {
 			printk(BIOS_ERR, "%s: Failed to render low-battery logo.\n", __func__);
+		}
+
+		/* Display Text message at the footer of splash screen if supported */
+		if (CONFIG(FRAMEBUFFER_SPLASH_TEXT)) {
+			char msg[MAX_SPLASH_TEXT_WIDTH];
+			if (platform_get_splash_text(BOOTSPLASH_LOW_BATTERY, msg, MAX_SPLASH_TEXT_WIDTH))
+				render_text_to_framebuffer(config, msg, BOOTSPLASH_TEXT_FOOTER);
+		}
+		return;
+	}
+
+	/*
+	 * If the device has booted due to cable power insertion aka off-mode then display
+	 * off-mode charging user notification and bail out early.
+	 */
+	if (platform_is_off_mode_charging_active()) {
+		if (load_and_render_logo_to_framebuffer(BOOTSPLASH_OFF_MODE_CHARGING, config) != 0)
+			printk(BIOS_ERR, "%s: Failed to render off-mode charging logo.\n", __func__);
+
+		/* Display Text message at the footer of splash screen if supported */
+		if (CONFIG(FRAMEBUFFER_SPLASH_TEXT)) {
+			char msg[MAX_SPLASH_TEXT_WIDTH];
+			if (platform_get_splash_text(BOOTSPLASH_OFF_MODE_CHARGING, msg,
+					 MAX_SPLASH_TEXT_WIDTH))
+				render_text_to_framebuffer(config, msg, BOOTSPLASH_TEXT_FOOTER);
 		}
 		return;
 	}

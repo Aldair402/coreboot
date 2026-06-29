@@ -13,7 +13,6 @@
 #include <soc/iomap.h>
 #include <soc/pcr_ids.h>
 #include <soc/pci_devs.h>
-#include <device/pci_ops.h>
 #include <stdint.h>
 
 #define MKHI_GROUP_ID_MCA			0x0a
@@ -192,7 +191,7 @@ static void dump_cse_state(void)
 	printk(BIOS_DEBUG, "CSE: Actual IBB Size        : %u\n",
 		fwsts3.fields.ibb_size);
 	printk(BIOS_DEBUG, "CSE: Verified Boot Valid    : %s\n",
-		fwsts4.fields.txe_veri_boot_valid ? "PASS" : "FAIL");
+		fwsts4.fields.txe_veri_boot_valid ? "YES" : "NO");
 	printk(BIOS_DEBUG, "CSE: Verified Boot Test     : %s\n",
 		fwsts4.fields.txe_veri_boot_test ? "YES" : "NO");
 	printk(BIOS_DEBUG, "CSE: FPF status             : %s\n",
@@ -218,7 +217,7 @@ void heci_cse_lockdown(void)
 	 * It is safe to disable HECI1 now since we won't be talking to the ME
 	 * anymore.
 	 */
-	if (CONFIG(DISABLE_HECI1_AT_PRE_BOOT))
+	if (soc_disable_heci1_at_pre_boot())
 		heci1_disable();
 }
 

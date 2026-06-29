@@ -2,6 +2,7 @@
 
 #include <baseboard/variants.h>
 #include <console/console.h>
+#include <delay.h>
 #include <fw_config.h>
 #include <gpio.h>
 #include <inttypes.h>
@@ -124,9 +125,29 @@ static const struct pad_config audio_disable_pads[] = {
 	PAD_NC(GPP_S07, NONE),
 };
 
-static const struct pad_config x4slot_pads[] = {
-	/* GPP_F10:     X4_PCIE_SLOT1_PWR_EN */
+static const struct pad_config power_x4slot_pads[] = {
+	/* x4 slot power sequence: 2. power = enable; */
+	/* GPP_F10:     X4_PCIE_SLOT_PWR_EN */
 	PAD_CFG_GPO(GPP_F10, 1, PLTRST),
+};
+
+static const struct pad_config clock_request_x4slot_pads[] = {
+	/* GPP_C11:     CLKREQ2_X4_GEN4_DT_CEM_SLOT1_N */
+	PAD_CFG_NF(GPP_C11, NONE, DEEP, NF1),
+};
+
+static const struct pad_config alt_clock_request_x4slot_pads[] = {
+	/* GPP_C14:     Used to simulate clock request from card */
+	PAD_CFG_GPO(GPP_C14, 0, DEEP),
+};
+
+static const struct pad_config disable_alt_clock_request_x4slot_pads[] = {
+	/* GPP_C14:     Used to simulate clock request from card */
+	PAD_CFG_GPI(GPP_C14, NONE, DEEP),
+};
+
+static const struct pad_config reset_deassert_x4slot_pads[] = {
+	/* x4 slot power sequence: 3. PERST# = de-assert */
 	/* GPP_E03:     X4_DT_PCIE_RST_N */
 	PAD_CFG_GPO(GPP_E03, 1, PLTRST),
 	/* GPP_D03:     X4_SLOT_WAKE_N */
@@ -134,12 +155,14 @@ static const struct pad_config x4slot_pads[] = {
 };
 
 static const struct pad_config x4slot_disable_pads[] = {
-	/* GPP_F10:     X4_PCIE_SLOT1_PWR_EN */
-	PAD_CFG_GPO(GPP_F10, 0, PLTRST),
-	/* GPP_E03:     X4_DT_PCIE_RST_N */
-	PAD_NC(GPP_E03, NONE),
+	/* GPP_C11:     CLKREQ2_X4_GEN4_DT_CEM_SLOT1_N */
+	PAD_NC(GPP_C11, NONE),
 	/* GPP_D03:     X4_SLOT_WAKE_N */
 	PAD_NC(GPP_D03, NONE),
+	/* GPP_E03:     X4_DT_PCIE_RST_N */
+	PAD_NC(GPP_E03, NONE),
+	/* GPP_F10:     X4_PCIE_SLOT1_PWR_EN */
+	PAD_CFG_GPO(GPP_F10, 0, PLTRST),
 };
 
 /*
@@ -190,13 +213,7 @@ static const struct pad_config wwan_disable_pads[] = {
 	PAD_NC(GPP_E02, NONE),
 };
 
-/* Gen4 NVME: at the top M.2 slot */
-static const struct pad_config pre_mem_gen4_ssd_pwr_seq1_pads[] = {
-	/* GPP_H18:     GEN4_SSD_PWREN */
-	PAD_CFG_GPO(GPP_H18, 0, PLTRST),
-};
-
-static const struct pad_config pre_mem_gen4_ssd_pwr_seq2_pads[] = {
+static const struct pad_config pre_mem_gen4_ssd_pwr_seq_pads[] = {
 	/* GPP_H18:     GEN4_SSD_PWREN */
 	PAD_CFG_GPO(GPP_H18, 1, PLTRST),
 };
@@ -288,6 +305,27 @@ static const struct pad_config touchscreen_disable_pads[] = {
 	PAD_NC(GPP_E17, NONE),
 	/* GPP_E18:     THC0_SPI1_INT_N_TCH_PNL1 */
 	PAD_NC(GPP_E18, NONE),
+	/* GPP_VGPIO3_THC0: THC0_WOT */
+	PAD_NC(GPP_VGPIO3_THC0, NONE),
+};
+
+static const struct pad_config touchscreen_lpss_i2c_enable_pads[] = {
+	/* GPP_E11:     THC0_SPI1_CLK_TCH_PNL1 */
+	PAD_NC(GPP_E11, NONE),
+	/* GPP_E12:     THC0_SPI1_IO_0_I2C4_SCL_TCH_PNL1 NF1: THC I2C0_SCL */
+	PAD_CFG_NF(GPP_E12, NONE, DEEP, NF8),
+	/* GPP_E13:     THC0_SPI1_IO_1_I2C4_SDA_TCH_PNL1 NF1: THC I2C0 SDA */
+	PAD_CFG_NF(GPP_E13, NONE, DEEP, NF8),
+	/* GPP_E14:     THC0_SPI1_IO_2_TCH_PNL1 */
+	PAD_NC(GPP_E14, NONE),
+	/* GPP_E15:     THC0_SPI1_IO_3_TCH_PNL1 */
+	PAD_NC(GPP_E15, NONE),
+	/* GPP_E16:     THC0_SPI1_RST_N_TCH_PNL1 */
+	PAD_CFG_GPO(GPP_E16, 1, DEEP),
+	/* GPP_E17:     THC0_SPI1_CS0_N_TCH_PNL1 */
+	PAD_NC(GPP_E17, NONE),
+	/* GPP_E18:     THC0_SPI1_INT_N_TCH_PNL1 */
+	PAD_CFG_GPI_APIC(GPP_E18, NONE, PLTRST, LEVEL, NONE),
 	/* GPP_VGPIO3_THC0: THC0_WOT */
 	PAD_NC(GPP_VGPIO3_THC0, NONE),
 };
@@ -474,10 +512,14 @@ void fw_config_configure_pre_mem_gpio(void)
 	if (!fw_config_probe(FW_CONFIG(CELLULAR, CELLULAR_ABSENT)))
 		GPIO_CONFIGURE_PADS(pre_mem_wwan_pwr_seq1_pads);
 
-	if (fw_config_probe(FW_CONFIG(STORAGE, STORAGE_NVME_GEN4))) {
-		GPIO_CONFIGURE_PADS(pre_mem_gen4_ssd_pwr_seq1_pads);
-	} else if (fw_config_probe(FW_CONFIG(STORAGE, STORAGE_UNKNOWN))) {
-		GPIO_CONFIGURE_PADS(pre_mem_gen4_ssd_pwr_seq1_pads);
+	if (!fw_config_probe(FW_CONFIG(SD, SD_NONE))) {
+		GPIO_CONFIGURE_PADS(power_x4slot_pads);
+		/*
+		 * Ocelot RVP hardware brings up power earlier, so no need
+		 * to delay 10mS before requesting clock.
+		 */
+		GPIO_CONFIGURE_PADS(alt_clock_request_x4slot_pads);
+		GPIO_CONFIGURE_PADS(clock_request_x4slot_pads);
 	}
 
 	/*
@@ -497,12 +539,20 @@ void fw_config_configure_pre_mem_gpio(void)
 		GPIO_CONFIGURE_PADS(pre_mem_fp_enable_pads);
 
 	if (fw_config_probe(FW_CONFIG(STORAGE, STORAGE_NVME_GEN4))) {
-		GPIO_CONFIGURE_PADS(pre_mem_gen4_ssd_pwr_seq2_pads);
+		GPIO_CONFIGURE_PADS(pre_mem_gen4_ssd_pwr_seq_pads);
 	} else if (fw_config_probe(FW_CONFIG(STORAGE, STORAGE_UNKNOWN))) {
-		GPIO_CONFIGURE_PADS(pre_mem_gen4_ssd_pwr_seq2_pads);
+		GPIO_CONFIGURE_PADS(pre_mem_gen4_ssd_pwr_seq_pads);
 	}
+}
 
-
+void variant_post_gpio_configure(void)
+{
+	// Deassert SD Card reset if needed
+	if (!fw_config_probe(FW_CONFIG(SD, SD_NONE))) {
+		GPIO_CONFIGURE_PADS(reset_deassert_x4slot_pads);
+		udelay(20);
+		GPIO_CONFIGURE_PADS(disable_alt_clock_request_x4slot_pads);
+	}
 }
 
 void fw_config_gpio_padbased_override(struct pad_config *padbased_table)
@@ -553,8 +603,6 @@ void fw_config_gpio_padbased_override(struct pad_config *padbased_table)
 
 	if (fw_config_probe(FW_CONFIG(SD, SD_NONE)))
 		GPIO_PADBASED_OVERRIDE(padbased_table, x4slot_disable_pads);
-	else
-		GPIO_PADBASED_OVERRIDE(padbased_table, x4slot_pads);
 
 	if (fw_config_probe(FW_CONFIG(TOUCHPAD, TOUCHPAD_LPSS_I2C))) {
 		GPIO_PADBASED_OVERRIDE(padbased_table, touchpad_lpss_i2c_enable_pads);
@@ -572,6 +620,8 @@ void fw_config_gpio_padbased_override(struct pad_config *padbased_table)
 		GPIO_PADBASED_OVERRIDE(padbased_table, touchscreen_thc_spi_enable_pads);
 		if (config->thc_wake_on_touch[0])
 			GPIO_PADBASED_OVERRIDE(padbased_table, thc0_enable_wake);
+	} else if (fw_config_probe(FW_CONFIG(TOUCHSCREEN, TOUCHSCREEN_LPSS_I2C_ELAN_REX))) {
+		GPIO_PADBASED_OVERRIDE(padbased_table, touchscreen_lpss_i2c_enable_pads);
 	} else {
 		GPIO_PADBASED_OVERRIDE(padbased_table, touchscreen_disable_pads);
 	}
@@ -582,7 +632,21 @@ void fw_config_gpio_padbased_override(struct pad_config *padbased_table)
 		GPIO_PADBASED_OVERRIDE(padbased_table, ish_disable_pads);
 	}
 
-	if (fw_config_probe(FW_CONFIG(FP, FP_PRESENT))) {
+	/*
+	 * *=========================================================================*
+	 * |             Usage                     |           GPP_E17               |
+	 * *=========================================================================*
+	 * | Touchscreen in THC-SPI (with rework)  | NF3: THC HID-SPI CS0            |
+	 * *---------------------------------------*---------------------------------*
+	 * | FPS present         (without rework)  | NF5: GSPI0 CS0                  |
+	 * *---------------------------------------*---------------------------------*
+	 *
+	 * NOTE: 1. CBI selecting TS THC-SPI or implies TS rework is applied for the board.
+	 *       2. CBI selecting TS THC-SPI with FPS present is invalid case.
+	 */
+	if (fw_config_probe(FW_CONFIG(TOUCHSCREEN, TOUCHSCREEN_THC_SPI))) {
+		/*  Board has TS THC-SPI rework and does not support FPS*/
+	} else if (fw_config_probe(FW_CONFIG(FP, FP_PRESENT))) {
 		GPIO_PADBASED_OVERRIDE(padbased_table, fp_enable_pads);
 	} else {
 		GPIO_PADBASED_OVERRIDE(padbased_table, fp_disable_pads);

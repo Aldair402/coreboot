@@ -25,9 +25,12 @@
 #define APM_CNT_ROUTE_ALL_XHCI	0xca
 #define APM_CNT_FINALIZE	0xcb
 #define APM_CNT_LEGACY		0xcc
+#define APM_CNT_ROM_ARMOR	0xea
 #define APM_CNT_MBI_UPDATE	0xeb
 #define APM_CNT_SMMINFO		0xec
 #define APM_CNT_SMMSTORE	0xed
+#define APM_CNT_OPAL_S3_UNLOCK	0xe9
+#define APM_CNT_OPAL_SVC	0xee
 #define APM_CNT_ELOG_GSMI	0xef
 #define APM_STS		0xb3
 
@@ -96,6 +99,14 @@ struct smm_runtime {
 	int smm_log_level;
 	uintptr_t smmstore_com_buffer_base;
 	size_t smmstore_com_buffer_size;
+#if CONFIG(SMM_OPAL_S3_SCRATCH_CBMEM)
+	uintptr_t opal_s3_scratch_base;
+	size_t opal_s3_scratch_size;
+#endif
+#if CONFIG(SMM_OPAL_S3_STATE_SMRAM)
+	uintptr_t opal_s3_state_base;
+	size_t opal_s3_state_size;
+#endif
 } __packed;
 
 struct smm_module_params {
@@ -202,6 +213,8 @@ static inline void aseg_region(uintptr_t *start, size_t *size)
 enum {
 	/* SMM handler area. */
 	SMM_SUBREGION_HANDLER,
+	/* Persistent OPAL S3 state area. */
+	SMM_SUBREGION_OPAL_S3_STATE,
 	/* SMM cache region. */
 	SMM_SUBREGION_CACHE,
 	/* Chipset specific area. */
@@ -238,5 +251,11 @@ bool smm_pci_resource_store_fill_resources(struct smm_pci_resource_info *slots, 
 void smm_pci_resource_store_init(struct smm_runtime *smm_runtime);
 
 void smm_get_smmstore_com_buffer(uintptr_t *base, size_t *size);
+#if CONFIG(SMM_OPAL_S3_SCRATCH_CBMEM)
+void smm_get_opal_s3_scratch_buffer(uintptr_t *base, size_t *size);
+#endif
+#if CONFIG(SMM_OPAL_S3_STATE_SMRAM)
+void smm_get_opal_s3_state_buffer(uintptr_t *base, size_t *size);
+#endif
 
 #endif /* CPU_X86_SMM_H */

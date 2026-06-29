@@ -14,6 +14,9 @@ config BOARD_GOOGLE_DOOKU
 config BOARD_GOOGLE_GROGU
 	bool "->  Grogu"
 
+config BOARD_GOOGLE_JAINA
+	bool "->  Jaina"
+
 config BOARD_GOOGLE_MACE
 	bool "->  Mace"
 
@@ -22,6 +25,12 @@ config BOARD_GOOGLE_OBIWAN
 
 config BOARD_GOOGLE_PADME
 	bool "->  Padme"
+
+config BOARD_GOOGLE_R2D2
+	bool "->  R2d2"
+
+config BOARD_GOOGLE_SHEEV
+	bool "->  Sheev"
 
 config BOARD_GOOGLE_SKYWALKER
 	bool "->  Skywalker"

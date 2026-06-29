@@ -5,41 +5,29 @@ subdirs-y += ../../../cpu/intel/microcode
 subdirs-y += ../../../cpu/intel/turbo
 
 # all (bootblock, verstage, romstage, postcar, ramstage)
-all-y += gspi.c
-all-y += i2c.c
-all-y += pmutil.c
-all-y += spi.c
-all-y += uart.c
 
 bootblock-y += bootblock/bootblock.c
 bootblock-y += bootblock/pch.c
 bootblock-y += bootblock/report_platform.c
-bootblock-y += espi.c
 bootblock-y += p2sb.c
 bootblock-$(CONFIG_ALDERLAKE_CONFIGURE_DESCRIPTOR) += bootblock/update_descriptor.c
 
 romstage-$(CONFIG_SOC_INTEL_CSE_PRE_CPU_RESET_TELEMETRY) += cse_telemetry.c
-romstage-y += espi.c
 romstage-y += meminit.c
 romstage-y += pcie_rp.c
-romstage-y += reset.c
 
 ramstage-y += acpi.c
 ramstage-y += chip.c
 ramstage-y += cpu.c
 ramstage-y += elog.c
-ramstage-y += espi.c
 ramstage-y += finalize.c
 ramstage-y += fsp_params.c
 ramstage-y += graphics.c
 ramstage-y += hsphy.c
-ramstage-y += lockdown.c
 ramstage-y += p2sb.c
 ramstage-y += pcie_rp.c
 ramstage-y += pmc.c
-ramstage-y += reset.c
 ramstage-$(CONFIG_SOC_INTEL_ALDERLAKE_TCSS_USB4_SUPPORT) += retimer.c
-ramstage-y += soundwire.c
 ramstage-y += systemagent.c
 ramstage-y += tcss.c
 ramstage-y += vr_config.c
@@ -48,9 +36,6 @@ ramstage-$(CONFIG_SOC_INTEL_CRASHLOG) += crashlog.c
 
 smm-y += elog.c
 smm-y += p2sb.c
-smm-y += pmutil.c
-smm-y += smihandler.c
-smm-y += uart.c
 smm-y += xhci.c
 
 ifeq ($(CONFIG_SOC_INTEL_ALDERLAKE_PCH_S),y)

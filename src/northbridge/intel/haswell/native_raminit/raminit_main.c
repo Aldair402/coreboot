@@ -5,7 +5,6 @@
 #include <console/console.h>
 #include <cpu/intel/haswell/haswell.h>
 #include <delay.h>
-#include <device/pci_ops.h>
 #include <northbridge/intel/haswell/chip.h>
 #include <northbridge/intel/haswell/haswell.h>
 #include <northbridge/intel/haswell/raminit.h>
@@ -129,6 +128,9 @@ static const struct task_entry cold_boot[] = {
 	{ train_receive_enable,                                   true, "RCVET",      },
 	{ train_read_mpr,                                         true, "RDMPRT",     },
 	{ train_jedec_write_leveling,                             true, "JWRL",       },
+	{ train_write_timing_centering,                           true, "WRTC1D",     },
+	{ train_read_timing_centering,                            true, "RDTC1D",     },
+	{ train_read_voltage_centering,                           true, "RDVC1D",     },
 	{ optimise_comp,                                          true, "OPTCOMP",    },
 	{ post_training,                                          true, "POSTTRAIN",  },
 	{ activate_mc,                                            true, "ACTIVATE",   },

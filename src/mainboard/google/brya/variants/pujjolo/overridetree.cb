@@ -85,7 +85,7 @@ chip soc/intel/alderlake
 	register "usb3_ports[2]" = "USB3_PORT_DEFAULT(OC_SKIP)"	# USB3 port for WWAN
 
 	# HD Audio
-	register "pch_hda_dsp_enable" = "1"
+	register "pch_hda_dsp_enable" = "true"
 	register "pch_hda_audio_link_hda_enable" = "1"
 	register "pch_hda_idisp_link_tmode" = "HDA_TMODE_8T"
 	register "pch_hda_idisp_link_frequency" = "HDA_LINKFREQ_96MHZ"
@@ -388,6 +388,7 @@ chip soc/intel/alderlake
 				register "acpi_uid" = "0"
 				register "acpi_name" = ""CAM0""
 				register "chip_name" = ""Ov 8856 Camera""
+				register "sensor_name" = ""CJAJ813""
 				register "device_type" = "INTEL_ACPI_CAMERA_SENSOR"
 				register "has_power_resource" = "1"
 				register "max_dstate_for_probe" = "ACPI_DEVICE_SLEEP_D3_COLD"

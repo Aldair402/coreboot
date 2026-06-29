@@ -1,7 +1,7 @@
 chip soc/intel/alderlake
 	# FSP UPDs
 	register "eist_enable"				= "true"
-	register "enable_c6dram"			= "1"
+	register "enable_c6dram"			= "true"
 	register "energy_efficient_turbo"		= "true"
 	register "sagv"					= "SaGv_Enabled"
 
@@ -199,7 +199,6 @@ chip soc/intel/alderlake
 				.flags					= PCIE_RP_LTR | PCIE_RP_AER,
 				.pcie_rp_aspm				= ASPM_L0S_L1,
 				.PcieRpL1Substates			= L1_SS_L1_2,
-				.pcie_rp_detect_timeout_ms		= 50,
 
 			}"
 			smbios_slot_desc				"SlotTypeM2Socket3"

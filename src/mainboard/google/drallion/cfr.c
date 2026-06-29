@@ -1,4 +1,3 @@
-
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <boot/coreboot_tables.h>
@@ -15,6 +14,7 @@ static struct sm_obj_form system = {
 		&legacy_8254_timer,
 		&me_state,
 		&me_state_counter,
+		&disable_heci1_at_pre_boot,
 		&pciexp_aspm,
 		&pciexp_clk_pm,
 		&pciexp_l1ss,

@@ -257,8 +257,19 @@ static int create_smbios_type17_for_dimm(struct dimm_info *dimm,
 		t->size = 0x7fff;
 		t->extended_size = dimm->dimm_size & 0x7fffffff;
 	}
+// If DDR5 memory is used, the definition of the bus_width field in the SPD spec is different from that of DDR4
+#if (CONFIG(DRAM_SUPPORT_DDR5))
+	union bus_width_struct bus_width_info;
+	bus_width_info.raw_data = dimm->bus_width;
+	uint8_t number_of_subchannel_per_dimm = 1 << bus_width_info.bits.number_of_subchannel_per_dimm;
+	uint8_t bus_width_ext_per_subchannel = 4 * bus_width_info.bits.bus_width_ext_per_subchannel;
+	uint8_t primary_bus_width_per_subchan = 8 * 1 << bus_width_info.bits.primary_bus_width_per_subchan;
+	t->data_width = number_of_subchannel_per_dimm * primary_bus_width_per_subchan;
+	t->total_width = t->data_width + number_of_subchannel_per_dimm * bus_width_ext_per_subchannel;
+#else
 	t->data_width = 8 * (1 << (dimm->bus_width & 0x7));
 	t->total_width = t->data_width + 8 * ((dimm->bus_width & 0x18) >> 3);
+#endif
 	t->form_factor = info.form_factor;
 
 	smbios_fill_dimm_manufacturer_from_id(dimm->mod_id, t);
@@ -445,6 +456,11 @@ unsigned int __weak smbios_cache_conf_operation_mode(u8 level)
 	return SMBIOS_CACHE_OP_MODE_UNKNOWN; /* Unknown */
 }
 
+u8 __weak smbios_cache_speed(u8 level)
+{
+	return 0; /* Unknown */
+}
+
 /* Returns the processor voltage in 100mV units */
 unsigned int __weak smbios_cpu_get_voltage(void)
 {
@@ -583,7 +599,7 @@ int smbios_write_type7(unsigned long *current,
 	t->associativity = associativity;
 	t->supported_sram_type = sram_type;
 	t->current_sram_type = sram_type;
-	t->cache_speed = 0; /* Unknown */
+	t->cache_speed = smbios_cache_speed(level);
 	t->error_correction_type = smbios_cache_error_correction_type(level);
 	t->system_cache_type = type;
 

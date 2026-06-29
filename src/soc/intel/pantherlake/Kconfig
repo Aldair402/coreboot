@@ -31,6 +31,7 @@ config SOC_INTEL_PANTHERLAKE_BASE
 	select HAVE_ESOL_SUPPORT_FOR_LOW_BATTERY_INDICATOR if CHROMEOS_ENABLE_ESOL
 	select HAVE_FSP_GOP
 	select HAVE_HYPERTHREADING
+	select HAVE_INTEL_FSP_REPO if FSP_TYPE_IOT
 	select HAVE_INTEL_COMPLIANCE_TEST_MODE
 	select HAVE_SMI_HANDLER
 	select HAVE_X86_64_SUPPORT
@@ -42,7 +43,7 @@ config SOC_INTEL_PANTHERLAKE_BASE
 	select INTEL_GMA_VERSION_2
 	select INTEL_KEYLOCKER
 	select IOAPIC
-	select MICROCODE_BLOB_UNDISCLOSED
+	select MICROCODE_BLOB_UNDISCLOSED if !SOC_INTEL_PANTHERLAKE_U_H
 	select MP_SERVICES_PPI_V2
 	select MRC_CACHE_USING_MRC_VERSION
 	select MRC_SETTINGS_PROTECT
@@ -64,6 +65,7 @@ config SOC_INTEL_PANTHERLAKE_BASE
 	select SOC_INTEL_COMMON_BLOCK_ACPI_PEP_LPM_REQ
 	select SOC_INTEL_COMMON_BLOCK_ASPM
 	select SOC_INTEL_COMMON_BLOCK_CAR
+	select SOC_INTEL_COMMON_BLOCK_CAR_ENHANCED_NEM
 	select SOC_INTEL_COMMON_BLOCK_CHIP_CONFIG
 	select SOC_INTEL_COMMON_BLOCK_CNVI
 	select SOC_INTEL_COMMON_BLOCK_CPU
@@ -96,6 +98,20 @@ config SOC_INTEL_PANTHERLAKE_BASE
 	select SOC_INTEL_COMMON_BLOCK_TRACEHUB
 	select SOC_INTEL_COMMON_BLOCK_XHCI
 	select SOC_INTEL_COMMON_BLOCK_XHCI_ELOG
+	select SOC_INTEL_COMMON_FEATURE
+	select SOC_INTEL_COMMON_FEATURE_CBFS_PRELOAD
+	select SOC_INTEL_COMMON_FEATURE_ESPI
+	select SOC_INTEL_COMMON_FEATURE_FINALIZE
+	select SOC_INTEL_COMMON_FEATURE_GLOBAL_RESET_CSE_PMC
+	select SOC_INTEL_COMMON_FEATURE_GSPI_DEVFN
+	select SOC_INTEL_COMMON_FEATURE_I2C_DEVFN
+	select SOC_INTEL_COMMON_FEATURE_LOCKDOWN
+	select SOC_INTEL_COMMON_FEATURE_PMUTIL
+	select SOC_INTEL_COMMON_FEATURE_SMIHANDLER
+	select SOC_INTEL_COMMON_FEATURE_SOUNDWIRE
+	select SOC_INTEL_COMMON_FEATURE_SPI_DEVFN
+	select SOC_INTEL_COMMON_FEATURE_SPI_DEVFN_PSF
+	select SOC_INTEL_COMMON_FEATURE_UART_DEVICES
 	select SOC_INTEL_COMMON_FSP_RESET
 	select SOC_INTEL_COMMON_PCH_CLIENT
 	select SOC_INTEL_COMMON_RESET
@@ -114,7 +130,6 @@ config SOC_INTEL_PANTHERLAKE_BASE
 	select UDK_202302_BINDING
 	select USE_COREBOOT_FOR_BMP_RENDERING
 	select USE_X86_64_SUPPORT
-	select X86_INIT_NEED_1_SIPI
 	help
 	  Intel Pantherlake support. Mainboards should specify the SoC
 	  type using the `SOC_INTEL_PANTHERLAKE_*` options instead
@@ -162,15 +177,6 @@ config SOC_INTEL_PANTHERLAKE_TCSS_USB4_SUPPORT
 	select SOC_INTEL_COMMON_BLOCK_USB4
 	select SOC_INTEL_COMMON_BLOCK_USB4_PCIE
 	select SOC_INTEL_COMMON_BLOCK_USB4_XHCI
-
-config CAR_ENHANCED_NEM
-	bool
-	default y if !INTEL_CAR_NEM
-	select INTEL_CAR_NEM_ENHANCED
-	select CAR_HAS_SF_MASKS
-	select COS_MAPPED_TO_MSB
-	select CAR_HAS_L3_PROTECTED_WAYS
-	select INTEL_CAR_ENEM_USE_EFFECTIVE_WAY_SIZE
 
 config MAX_CPUS
 	int
@@ -253,8 +259,7 @@ config MAX_TBT_ROOT_PORTS
 config MAX_ROOT_PORTS
 	int
 	default 6 if SOC_INTEL_WILDCATLAKE
-	default 12 if SOC_INTEL_PANTHERLAKE_H
-	default 10
+	default 12
 
 config MAX_PCIE_CLOCK_SRC
 	int
@@ -366,10 +371,22 @@ config CONSOLE_CBMEM_BUFFER_SIZE
 	default 0x100000 if BUILDING_WITH_DEBUG_FSP
 	default 0x40000
 
+config FSP_TYPE_IOT
+	bool
+	default n
+	help
+	  This option allows to select FSP IOT type from 3rdparty/fsp repo
+
 config FSP_HEADER_PATH
 	string "Location of FSP headers"
-	default "src/vendorcode/intel/fsp/fsp2_0/wildcatlake" if SOC_INTEL_WILDCATLAKE
-	default "src/vendorcode/intel/fsp/fsp2_0/pantherlake/"
+	default "src/vendorcode/intel/fsp/fsp2_0/wildcatlake" if !FSP_USE_REPO && SOC_INTEL_WILDCATLAKE
+	default "src/vendorcode/intel/fsp/fsp2_0/pantherlake/" if !FSP_USE_REPO
+	default "3rdparty/fsp/PantherLakeFspBinPkg/IoT/PantherLake/Include/" if FSP_TYPE_IOT && SOC_INTEL_PANTHERLAKE
+
+config FSP_FD_PATH
+	string
+	depends on FSP_USE_REPO
+	default "3rdparty/fsp/PantherLakeFspBinPkg/IoT/PantherLake/Fsp.fd"   if FSP_TYPE_IOT && SOC_INTEL_PANTHERLAKE
 
 # Override platform debug consent value:
 #  0: Disabled,
@@ -475,5 +492,13 @@ config RAMSTAGE_CBFS_CACHE_SIZE
 # Fast SPI DMA operations require 1 KiB-aligned memory buffers.
 config CBFS_CACHE_ALIGN
 	default 1024
+
+config SOC_INTEL_SPI_DEV_MAX
+	int
+	default 3
+
+config SOC_INTEL_SPI_PSF_DESTINATION_ID
+	hex
+	default 0x5140
 
 endif

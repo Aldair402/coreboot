@@ -5,10 +5,6 @@
 ################################################################################
 ifeq ($(CONFIG_ARCH_RISCV),y)
 
-ifeq ($(CONFIG_ARCH_RAMSTAGE_RISCV),y)
-check-ramstage-overlap-regions += stack
-endif
-
 riscv_flags = -I$(src)/arch/riscv/
 
 ifeq ($(CONFIG_ARCH_RISCV_RV64),y)
@@ -134,6 +130,8 @@ endif #CONFIG_ARCH_ROMSTAGE_RISCV
 ################################################################################
 ifeq ($(CONFIG_ARCH_RAMSTAGE_RISCV),y)
 
+check-ramstage-overlap-regions += stack ramstage
+
 ramstage-y =
 ramstage-y += ramstage.S
 ramstage-y += tables.c
@@ -171,7 +169,7 @@ $(OPENSBI_TARGET): $(obj)/config.h | $(OPENSBI_SOURCE)
 	mkdir -p $(OPENSBI_BUILD)
 	$(MAKE) \
 		-C "$(OPENSBI_SOURCE)" \
-		CC="$(GCC_ramstage) -fno-builtin" \
+		CC="$(GCC_ramstage) -fno-builtin -std=gnu11" \
 		LD="$(LD_ramstage)" \
 		OBJCOPY="$(OBJCOPY_ramstage)" \
 		AR="$(AR_ramstage)" \

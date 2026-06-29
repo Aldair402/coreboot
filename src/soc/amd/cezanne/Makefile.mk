@@ -19,6 +19,7 @@ bootblock-y	+= espi_util.c
 romstage-y	+= fsp_m_params.c
 romstage-$(CONFIG_SOC_AMD_CEZANNE) += fsp_m_params_cezanne.c
 romstage-$(CONFIG_SOC_AMD_RENOIR)  += fsp_m_params_renoir.c
+romstage-$(CONFIG_SOC_AMD_V2000A)  += fsp_m_params_renoir.c
 
 ramstage-y	+= acpi.c
 ramstage-y	+= chip.c
@@ -38,15 +39,6 @@ smm-$(CONFIG_DEBUG_SMI) += uart.c
 
 CPPFLAGS_common += -I$(src)/soc/amd/cezanne/include
 CPPFLAGS_common += -I$(src)/soc/amd/cezanne/acpi
-CPPFLAGS_common += -I$(src)/vendorcode/amd/fsp/common
-
-ifeq ($(CONFIG_SOC_AMD_CEZANNE),y)
-CPPFLAGS_common += -I$(src)/vendorcode/amd/fsp/cezanne
-endif
-
-ifeq ($(CONFIG_SOC_AMD_RENOIR),y)
-CPPFLAGS_common += -I$(src)/vendorcode/amd/fsp/renoir
-endif
 
 # 0x40 accounts for the cbfs_file struct + filename + metadata structs, aligned to 64 bytes
 # Building the cbfs image will fail if the offset isn't large enough
@@ -191,7 +183,36 @@ OPT_PSP_SOFTFUSE=$(call add_opt_prefix, $(PSP_SOFTFUSE), --soft-fuse)
 OPT_WHITELIST_FILE=$(call add_opt_prefix, $(PSP_WHITELIST_FILE), --whitelist)
 OPT_SPL_TABLE_FILE=$(call add_opt_prefix, $(SPL_TABLE_FILE), --spl-table)
 
-OPT_RECOVERY_AB=$(call add_opt_prefix, $(CONFIG_PSP_RECOVERY_AB), --recovery-ab)
+# Target an offset into the CBFS. AMDFWTOOL will align it again and
+# pad the space between the CBFS file header and the directory table.
+# 0x80 accounts for the cbfs_file struct + filename + metadata structs
+AMD_FW_AB_POSITION := 0x80
+
+ifeq ($(CONFIG_PSP_AB_RECOVERY),y)
+CEZANNE_FW_A_RECOVERY=$(if $(call get_fmap_value,FMAP_SECTION_RECOVERY_A_START), $(call int-add, \
+	$(call get_fmap_value,FMAP_SECTION_RECOVERY_A_START) $(AMD_FW_AB_POSITION)), \
+	$(error "CONFIG_PSP_AB_RECOVERY is enabled but region RECOVERY_A is not defined in the flash map"))
+
+CEZANNE_FW_B_RECOVERY=$(if $(call get_fmap_value,FMAP_SECTION_RECOVERY_B_START), $(call int-add, \
+	$(call get_fmap_value,FMAP_SECTION_RECOVERY_B_START) $(AMD_FW_AB_POSITION)), \
+	$(error "CONFIG_PSP_AB_RECOVERY is enabled but region RECOVERY_B is not defined in the flash map"))
+
+ifeq ($(CONFIG_SOC_AMD_V2000A),y)
+	PSP_AB_NVRAM_BASE=$(if $(call get_fmap_value,FMAP_SECTION_PSP_AB_NVRAM_START), \
+		$(call _tohex,$(call get_fmap_value,FMAP_SECTION_PSP_AB_NVRAM_START)), \
+		$(error "CONFIG_PSP_AB_RECOVERY is enabled but region PSP_AB_NVRAM is not defined in the flash map"))
+	PSP_AB_NVRAM_SIZE=$(call get_fmap_value,FMAP_SECTION_PSP_AB_NVRAM_SIZE)
+endif
+endif
+
+OPT_PSP_AB_NVRAM_BASE=$(call add_opt_prefix, $(PSP_AB_NVRAM_BASE), --ab-nvram-base)
+OPT_PSP_AB_NVRAM_SIZE=$(call add_opt_prefix, $(PSP_AB_NVRAM_SIZE), --ab-nvram-size)
+
+OPT_RECOVERY_AB=$(call add_opt_prefix, $(CONFIG_PSP_AB_RECOVERY), --recovery-ab)
+OPT_RECOVERY_AB+=$(if $(CONFIG_PSP_AB_RECOVERY), --recovery-a-location $(call _tohex, $(CEZANNE_FW_A_RECOVERY)))
+OPT_RECOVERY_AB+=$(if $(CONFIG_PSP_AB_RECOVERY), --recovery-b-location $(call _tohex, $(CEZANNE_FW_B_RECOVERY)))
+OPT_BIOS_AMDCOMPRESS=$(if $(CONFIG_CBFS_VERIFICATION), --elfcopy, --compress)
+OPT_BIOS_FWCOMPRESS=$(if $(CONFIG_CBFS_VERIFICATION), --bios-bin-uncomp)
 
 AMDFW_COMMON_ARGS=$(OPT_PSP_APCB_FILES) \
 		$(OPT_PSP_NVRAM_BASE) \
@@ -216,6 +237,8 @@ AMDFW_COMMON_ARGS=$(OPT_PSP_APCB_FILES) \
 		$(OPT_EFS_SPI_SPEED) \
 		$(OPT_EFS_SPI_MICRON_FLAG) \
 		$(OPT_RECOVERY_AB) \
+		$(OPT_PSP_AB_NVRAM_BASE) \
+		$(OPT_PSP_AB_NVRAM_SIZE) \
 		--config $(CONFIG_AMDFW_CONFIG_FILE) \
 		--flashsize $(CONFIG_ROM_SIZE)
 
@@ -236,8 +259,8 @@ $(obj)/amdfw.rom:	$(call strip_quotes, $(PSP_BIOSBIN_FILE)) \
 		$(OPT_APOB_NV_BASE) \
 		$(OPT_VERSTAGE_FILE) \
 		$(OPT_VERSTAGE_SIG_FILE) \
+		$(OPT_BIOS_FWCOMPRESS) \
 		--location $(CONFIG_AMD_FWM_POSITION) \
-		--multilevel \
 		--output $@
 
 #
@@ -250,8 +273,8 @@ $(obj)/amdfw.rom:	$(call strip_quotes, $(PSP_BIOSBIN_FILE)) \
 $(PSP_BIOSBIN_FILE): $(PSP_ELF_FILE) $(AMDCOMPRESS)
 	rm -f $@
 	@printf "    AMDCOMPRS  $(subst $(obj)/,,$(@))\n"
-	$(AMDCOMPRESS) --infile $(PSP_ELF_FILE) --outfile $@ --compress \
-		--maxsize $(PSP_BIOSBIN_SIZE)
+	$(AMDCOMPRESS) --infile $(PSP_ELF_FILE) --outfile $@ \
+		$(OPT_BIOS_AMDCOMPRESS) --maxsize $(PSP_BIOSBIN_SIZE)
 
 $(obj)/amdfw_a.rom: $(obj)/amdfw.rom
 	rm -f $@
@@ -262,7 +285,6 @@ $(obj)/amdfw_a.rom: $(obj)/amdfw.rom
 		$(OPT_APOB_NV_BASE) \
 		--location $(call _tohex,$(CEZANNE_FW_A_POSITION)) \
 		--anywhere \
-		--multilevel \
 		--output $@
 
 $(obj)/amdfw_b.rom: $(obj)/amdfw.rom
@@ -274,7 +296,6 @@ $(obj)/amdfw_b.rom: $(obj)/amdfw.rom
 		$(OPT_APOB_NV_BASE) \
 		--location $(call _tohex,$(CEZANNE_FW_B_POSITION)) \
 		--anywhere \
-		--multilevel \
 		--output $@
 
 
@@ -292,6 +313,26 @@ apu/amdfw_b-file := $(obj)/amdfw_b.rom
 # Ensure this ends up at the beginning of the FW_MAIN_B fmap region
 apu/amdfw_b-position := $(AMD_FW_AB_POSITION)
 apu/amdfw_b-type := raw
+endif
+
+ifeq ($(CONFIG_PSP_AB_RECOVERY),y)
+
+$(obj)/amdfw.rom.ra: $(obj)/amdfw.rom
+$(obj)/amdfw.rom.rb: $(obj)/amdfw.rom
+
+regions-for-file-apu/amdfw_ra = BOOTBLOCK
+regions-for-file-apu/amdfw_rb = BOOTBLOCK_B
+
+cbfs-files-y += apu/amdfw_ra
+apu/amdfw_ra-file := $(obj)/amdfw.rom.ra
+apu/amdfw_ra-position := $(AMD_FW_AB_POSITION)
+apu/amdfw_ra-type := amdfw
+
+cbfs-files-y += apu/amdfw_rb
+apu/amdfw_rb-file := $(obj)/amdfw.rom.rb
+apu/amdfw_rb-position := $(AMD_FW_AB_POSITION)
+apu/amdfw_rb-type := amdfw
+
 endif
 
 endif # ($(CONFIG_SOC_AMD_CEZANNE_BASE),y)

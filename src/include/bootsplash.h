@@ -13,9 +13,21 @@ enum bootsplash_type {
 	BOOTSPLASH_CENTER,
 	/* Indicates an optional OEM defined bootsplash logo for footer of the splash screen. */
 	BOOTSPLASH_FOOTER,
+	/* Indicates a off-mode charging bootsplash logo. */
+	BOOTSPLASH_OFF_MODE_CHARGING,
 
 	/* It's used to determine the total number of bootsplash types. */
 	BOOTSPLASH_MAX_NUM,
+};
+
+enum bootsplash_text_type {
+	/* Indicates a bootsplash text message appear at the center of the screen. */
+	BOOTSPLASH_TEXT_CENTER,
+	/* Indicates a bootsplash text message appear at the footer of the screen. */
+	BOOTSPLASH_TEXT_FOOTER,
+
+	/* It's used to determine the total number of bootsplash types. */
+	BOOTSPLASH_TEXT_MAX_NUM,
 };
 
 /**
@@ -139,6 +151,15 @@ struct logo_config {
 	uint8_t logo_bottom_margin;
 };
 
+/*
+ * Calculates the destination coordinates for the logo based on both horizontal and
+ * vertical alignment settings.
+ */
+struct logo_coordinates calculate_logo_coordinates(
+	uint32_t horizontal_resolution, uint32_t vertical_resolution,
+	uint32_t logo_width, uint32_t logo_height,
+	enum fw_splash_horizontal_alignment halignment,
+	enum fw_splash_vertical_alignment valignment);
 void render_logo_to_framebuffer(struct logo_config *config);
 void load_and_convert_bmp_to_blt(uintptr_t *logo, size_t *logo_size,
 	uintptr_t *blt, size_t *blt_size, uint32_t *pixel_height, uint32_t *pixel_width,
@@ -146,7 +167,12 @@ void load_and_convert_bmp_to_blt(uintptr_t *logo, size_t *logo_size,
 void convert_bmp_to_blt(uintptr_t logo, size_t logo_size,
 	uintptr_t *blt, size_t *blt_size, uint32_t *pixel_height, uint32_t *pixel_width,
 	enum lb_fb_orientation orientation);
+void render_text_to_framebuffer(struct logo_config *config, const char *str,
+	enum bootsplash_text_type type);
+bool platform_get_splash_text(enum bootsplash_type logo_type, char *msg, size_t msg_max);
 
+/* Mainboard-specific override for logo filenames */
+const char *mainboard_bmp_logo_filename(void);
 /*
  * Allow platform-specific BMP logo overrides via HAVE_CUSTOM_BMP_LOGO config.
  * For example: Introduce configurable BMP logo for customization on platforms like ChromeOS
@@ -165,8 +191,44 @@ void bmp_release_logo(void);
  */
 #if CONFIG(PLATFORM_HAS_LOW_BATTERY_INDICATOR)
 bool platform_is_low_battery_shutdown_needed(void);
+/*
+ * Platform hooks for system shutdown due to critical battery levels.
+ * Provides visual feedback via the Lightbar/LEDs and logs the event
+ * to non-volatile storage before signaling to cut power.
+ */
+void platform_handle_emergency_low_battery(void);
 #else
 static inline bool platform_is_low_battery_shutdown_needed(void) { return false; }
+static inline void platform_handle_emergency_low_battery(void) { /* nop */ }
+#endif
+
+#if CONFIG(PLATFORM_HAS_SECONDARY_BOOT_INDICATOR_LOGO)
+bool platform_use_secondary_logo(void);
+#else
+static inline bool platform_use_secondary_logo(void) { return false; }
+#endif
+
+/*
+ * Platform specific callbacks for off-mode bootsplash handling.
+ *
+ * These callbacks allow the platform to determine if the device
+ * has booted in off-mode charging to render the appropriate user
+ * notification.
+ */
+#if CONFIG(PLATFORM_HAS_OFF_MODE_CHARGING_INDICATOR)
+/*
+ * platform_is_off_mode_charging_active - Check if off-mode charging is required.
+ *
+ * Returns true if the system should stay in a "charging splash" state
+ * instead of performing a full OS boot or a complete power-off.
+ */
+bool platform_is_off_mode_charging_active(void);
+#else
+/* Inline fallback for platforms without off-mode charging support */
+static inline bool platform_is_off_mode_charging_active(void)
+{
+	return false;
+}
 #endif
 
 /*

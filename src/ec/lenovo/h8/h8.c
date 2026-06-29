@@ -67,18 +67,30 @@ static void h8_charge_priority(enum battery battery)
 
 static void h8_sticky_fn(int on)
 {
-	if (on)
+	if (on) {
 		ec_set_bit(0x0, 3);
-	else
+		if (CONFIG(H8_HAS_FNLOCK_LED))
+			ec_set_bit(0x3, 4);
+	} else {
 		ec_clr_bit(0x0, 3);
+		if (CONFIG(H8_HAS_FNLOCK_LED))
+			ec_clr_bit(0x3, 4);
+	}
 }
 
-static void f1_to_f12_as_primary(int on)
+/*
+ * Stock BIOS uses bits 2-3 in 0x09 for this option.
+ * Bit 3 in 0x3b is only used by physical Fn+Esc toggle!
+ */
+static void h8_f1_to_f12_as_primary(int on)
 {
-	if (on)
-		ec_set_bit(0x3b, 3);
-	else
-		ec_clr_bit(0x3b, 3);
+	if (on) {
+		ec_set_bit(0x09, 2);
+		ec_clr_bit(0x09, 3);
+	} else {
+		ec_set_bit(0x09, 3);
+		ec_clr_bit(0x09, 2);
+	}
 }
 
 static u8 h8_build_id_and_function_spec_version(char *buf, u8 buf_len)
@@ -241,6 +253,7 @@ static void h8_enable(struct device *dev)
 {
 	struct ec_lenovo_h8_config *conf = dev->chip_info;
 	u8 val;
+	u8 backlight;
 	u8 beepmask0, beepmask1, reg8;
 
 	dev->ops = &h8_dev_ops;
@@ -254,11 +267,20 @@ static void h8_enable(struct device *dev)
 	reg8 |= H8_CONFIG0_TC_ENABLE;
 	ec_write(H8_CONFIG0, reg8);
 
+	/* Default to both keyboard illumination devices */
+	backlight = get_uint_option("backlight", 0) & 0x3;
+
+	/*
+	 * Disable keyboard backlight if:
+	 *   - Non-backlit hardware is physically installed -or-
+	 *   - "Thinklight only" or "None" is selected as keyboard illumination
+	 */
+	if (conf->has_keyboard_backlight)
+		conf->has_keyboard_backlight = (ec_read(0x34) & 0x40) && !(backlight & 0x2);
+
 	reg8 = conf->config1;
-	if (conf->has_keyboard_backlight) {
-		/* Default to both backlights */
-		reg8 = (reg8 & 0xf3) | ((get_uint_option("backlight", 0) & 0x3) << 2);
-	}
+	if (conf->has_thinklight || conf->has_keyboard_backlight)
+		reg8 = (reg8 & 0xf3) | (backlight << 2);
 	ec_write(H8_CONFIG1, reg8);
 	ec_write(H8_CONFIG2, conf->config2);
 	ec_write(H8_CONFIG3, conf->config3);
@@ -268,6 +290,8 @@ static void h8_enable(struct device *dev)
 	 * (Without this warm reboot leaves LEDs off)
 	 */
 	ec_write(H8_LED_CONTROL, H8_LED_CONTROL_ON | H8_LED_CONTROL_POWER_LED);
+	if (CONFIG(H8_HAS_LEDLOGO))
+		ec_write(H8_LED_CONTROL, H8_LED_CONTROL_ON | H8_LED_CONTROL_LOGO_LED);
 
 	beepmask0 = conf->beepmask0;
 	beepmask1 = conf->beepmask1;
@@ -338,7 +362,7 @@ static void h8_enable(struct device *dev)
 	h8_sticky_fn(get_uint_option("sticky_fn", 0));
 
 	if (CONFIG(H8_HAS_PRIMARY_FN_KEYS))
-		f1_to_f12_as_primary(get_uint_option("f1_to_f12_as_primary", 1));
+		h8_f1_to_f12_as_primary(get_uint_option("f1_to_f12_as_primary", 1));
 
 	h8_charge_priority(get_uint_option("first_battery", PRIMARY_BATTERY));
 

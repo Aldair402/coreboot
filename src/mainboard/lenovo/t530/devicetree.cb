@@ -35,9 +35,9 @@ chip northbridge/intel/sandybridge
 			# Set max SATA speed to 6.0 Gb/s
 			register "sata_interface_speed_support" = "0x3"
 
-			register "gen1_dec" = "0x7c1601"
-			register "gen2_dec" = "0x0c15e1"
-			register "gen4_dec" = "0x0c06a1"
+			register "gen1_dec" = "0x00c15e1"
+			register "gen2_dec" = "0x07c1601"
+			register "gen3_dec" = "0x00c06a1"
 
 			# Enable zero-based linear PCIe root port functions
 			register "pcie_port_coalesce" = "true"
@@ -98,11 +98,12 @@ chip northbridge/intel/sandybridge
 					register "config2" = "0xa0"
 					register "config3" = "0xc2"
 
-					register "has_keyboard_backlight" = "1"
+					register "has_thinklight" = "true"
+					register "has_keyboard_backlight" = "true"
 
 					register "beepmask0" = "0x00"
 					register "beepmask1" = "0x86"
-					register "has_power_management_beeps" = "0"
+					register "has_power_management_beeps" = "false"
 					register "event2_enable" = "0xff"
 					register "event3_enable" = "0xff"
 					register "event4_enable" = "0xd0"
@@ -121,7 +122,7 @@ chip northbridge/intel/sandybridge
 					register "bdc_gpio_lvl" = "0"
 				end
 				chip drivers/lenovo/hybrid_graphics
-					device pnp ff.f on end # dummy
+					device generic 0 alias hg_mux on end # dummy
 
 					register "detect_gpio" = "21"
 

@@ -13,7 +13,16 @@ static const struct cbmem_entry *logo_entry;
 static const char *bootsplash_list[BOOTSPLASH_MAX_NUM] = {
 	[BOOTSPLASH_LOW_BATTERY] = "low_battery.bmp",
 	[BOOTSPLASH_CENTER] = "logo.bmp",
-	[BOOTSPLASH_FOOTER] = "footer_logo.bmp"
+	[BOOTSPLASH_FOOTER] = "footer_logo.bmp",
+	[BOOTSPLASH_OFF_MODE_CHARGING] = "off_mode_charging.bmp"
+};
+
+/* Mapping of different bootsplash logo name (including secondary) based on bootsplash type */
+static const char *alt_bootsplash_list[BOOTSPLASH_MAX_NUM] = {
+	[BOOTSPLASH_LOW_BATTERY] = "low_battery_alt.bmp",
+	[BOOTSPLASH_CENTER] = "logo.bmp",
+	[BOOTSPLASH_FOOTER] = "footer_logo.bmp",
+	[BOOTSPLASH_OFF_MODE_CHARGING] = "off_mode_charging_alt.bmp"
 };
 
 /*
@@ -27,7 +36,7 @@ static const char *bmp_get_logo_filename(enum bootsplash_type type)
 	if ((type == BOOTSPLASH_CENTER) && CONFIG(HAVE_CUSTOM_BMP_LOGO))
 		return bmp_logo_filename();
 
-	return bootsplash_list[type];
+	return platform_use_secondary_logo() ? alt_bootsplash_list[type] : bootsplash_list[type];
 }
 
 void *bmp_load_logo_by_type(enum bootsplash_type type, size_t *logo_size)
@@ -59,6 +68,9 @@ void *bmp_load_logo(size_t *logo_size)
 
 	if (platform_is_low_battery_shutdown_needed())
 		type = BOOTSPLASH_LOW_BATTERY;
+
+	if (platform_is_off_mode_charging_active())
+		type = BOOTSPLASH_OFF_MODE_CHARGING;
 
 	return bmp_load_logo_by_type(type, logo_size);
 }

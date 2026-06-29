@@ -45,6 +45,9 @@ config BOARD_GOOGLE_CROTA
 config BOARD_GOOGLE_DIRKS
 	bool "->  Dirks (Acer Chromebox Mini CXM2 (TWL))"
 
+config BOARD_GOOGLE_DIRKSON
+	bool "->  Dirkson"
+
 config BOARD_GOOGLE_DOCHI
 	bool "->  Dochi (Acer Chromebook Plus Spin 514)"
 
@@ -95,6 +98,9 @@ config BOARD_GOOGLE_KINOX
 config BOARD_GOOGLE_KULDAX
 	bool "->  Kuldax (ASUS Chromebox 5/5a (CN67))"
 
+config BOARD_GOOGLE_KULNEX
+	bool "->  Kulnex"
+
 config BOARD_GOOGLE_JOXER
 	bool "->  Joxer (HP Chromebook x360 14b)"
 
@@ -117,6 +123,9 @@ config BOARD_GOOGLE_MOLI
 
 config BOARD_GOOGLE_MOXIE
 	bool "->  Moxie (Acer Chromebox CXI6)"
+
+config BOARD_GOOGLE_MOXOE
+	bool "->  Moxoe"
 
 config BOARD_GOOGLE_NIVVIKS
 	bool "->  Nivviks"

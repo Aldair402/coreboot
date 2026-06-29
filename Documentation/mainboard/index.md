@@ -33,6 +33,7 @@ pademelon <amd/pademelon/pademelon.md>
 H77 Pro4-M <asrock/h77pro4-m.md>
 H81M-HDS <asrock/h81m-hds.md>
 H110M-DVS <asrock/h110m-dvs.md>
+H370m-ITX/ac <asrock/h370m-itx_ac.md>
 IMB-1222 <asrock/imb-1222.md>
 ```
 
@@ -44,6 +45,7 @@ IMB-1222 <asrock/imb-1222.md>
 A88XM-E <asus/a88xm-e.md>
 F2A85-M <asus/f2a85-m.md>
 H610i-PLUS D4 <asus/h610i-plus-d4>
+H81M-K <asus/h81m-k.md>
 P2B-LS <asus/p2b-ls.md>
 P3B-F <asus/p3b-f.md>
 P5Q <asus/p5q.md>
@@ -56,6 +58,7 @@ P8Z77-M Pro <asus/p8z77-m_pro.md>
 P8Z77-V <asus/p8z77-v.md>
 P8Z77-V LE PLUS <asus/p8z77-v_le_plus.md>
 wifigo_v1 <asus/wifigo_v1.md>
+PRIME H610M-K D4 <asus/h610m-k.md>
 ```
 
 ## Cavium
@@ -116,6 +119,14 @@ FBG-1701 <facebook/fbg1701.md>
 Monolith <facebook/monolith.md>
 ```
 
+## Framework
+
+```{toctree}
+:maxdepth: 1
+
+Laptop 13 Intel Core Ultra Series 1 (Marigold) <framework/marigold.md>
+Laptop 13 Intel Core Ultra Series 3 (Sakura) <framework/sakura.md>
+```
 ## Foxconn
 
 ```{toctree}
@@ -195,12 +206,12 @@ M920 Tiny <lenovo/m920q.md>
 vboot <lenovo/vboot.md>
 ```
 
-### GM45 series
+### GM45 / GM965 series
 
 ```{toctree}
 :maxdepth: 1
 
-X200 / T400 / T500 / X301 common <lenovo/montevina_series.md>
+X200 / T400 / T500 / X301 / X61 common <lenovo/gm45_gm965_series.md>
 X301 <lenovo/x301.md>
 ```
 
@@ -356,10 +367,11 @@ StarLite Mk IV <starlabs/lite_glkr.md>
 StarLite Mk V <starlabs/lite_adl.md>
 StarBook Mk V <starlabs/starbook_tgl.md>
 StarBook Mk VI <starlabs/starbook_adl.md>
+StarBook Mk VI AMD <starlabs/starbook_czn.md>
 StarBook Mk VII (N200) <starlabs/starbook_adl_n.md>
 StarBook Mk VII (165H) <starlabs/starbook_mtl.md>
 StarBook Horizon <starlabs/adl_horizon.md>
-Byte Mk II <starlabs/byte_adl.md>
+Byte Mk II <starlabs/byte.md>
 StarFighter Mk I <starlabs/starfighter_rpl.md>
 StarFighter Mk II <starlabs/starfighter_mtl.md>
 

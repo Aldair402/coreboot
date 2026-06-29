@@ -22,6 +22,7 @@ Scope(\_SB) { /* Start \_SB scope */
 	Scope(PCI0) {
 		/* Describe the AMD Northbridge */
 		#include "northbridge.asl"
+		#include "pci.asl"
 
 		/* Describe the AMD Fusion Controller Hub */
 		#include <soc/amd/common/acpi/lpc.asl>
@@ -36,6 +37,8 @@ Scope(\_SB) { /* Start \_SB scope */
 
 	/* Describe the MMIO devices in the FCH */
 	#include "mmio.asl"
+
+	#include "acp.asl"
 
 	/* Add GPIO library */
 	#include <soc/amd/common/acpi/gpio_bank_lib.asl>

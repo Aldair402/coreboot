@@ -1,7 +1,5 @@
 chip soc/intel/elkhartlake
 
-	device cpu_cluster 0 on end
-
 	# GPE configuration
 	# Note that GPE events called out in ASL code rely on this
 	# route. i.e. If this route changes then the affected GPE
@@ -63,6 +61,23 @@ chip soc/intel/elkhartlake
 	register "PcieRpLtrDisable[1]" = "true"
 	register "PcieRpLtrDisable[2]" = "true"
 	register "PcieRpLtrDisable[4]" = "true"
+
+	# Adjust TX Output De-Emphasis for PCIe RP3 to -6.3 dB
+	register "pcie_mp_cfg[2]" = "{
+		.tx_gen2_de_emph_3p5 = 0x1f,
+	}"
+
+	# Enable PCIe EQ override
+	register "PcieEqOverrideDefault" = "true"
+	register "PcieEqMethod" = "FIXED_EQ"
+	register "PcieEqMode" = "COEFFICIENT_EQ"
+	register "PcieEqPh3NumberOfPresetsOrCoefficients" = "2"
+	register "PcieEqPh3PreCursorList[0]" = "10"
+	register "PcieEqPh3PreCursorList[1]" = "10"
+	register "PcieEqPh3PostCursorList[0]" = "8"
+	register "PcieEqPh3PostCursorList[1]" = "8"
+	register "PcieEqPh1DownstreamPortTransmitterPreset" = "7"
+	register "PcieEqPh1UpstreamPortTransmitterPreset" = "1"
 
 	# Storage (SDCARD/EMMC) related UPDs
 	register "ScsEmmcHs400Enabled" = "0"
@@ -158,10 +173,10 @@ chip soc/intel/elkhartlake
 			# Enable external RTC chip
 			chip drivers/i2c/rv3028c7
 				register "bus_speed" = "I2C_SPEED_STANDARD"
-				register "set_user_date" = "1"
-				register "user_year" = "04"
-				register "user_month" = "07"
-				register "user_day" = "01"
+				register "set_user_date" = "true"
+				register "user_year" = "4"
+				register "user_month" = "7"
+				register "user_day" = "1"
 				register "user_weekday" = "4"
 				register "bckup_sw_mode" = "BACKUP_SW_LEVEL"
 				register "cap_charge" = "CHARGE_OFF"

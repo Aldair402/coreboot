@@ -1,7 +1,39 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <baseboard/variants.h>
+#include <fsp/graphics.h>
+#include <fsp/util.h>
 #include <ec/google/chromeec/ec.h>
+
+/* Threshold for selecting lower-resolution assets */
+#define FHD_WIDTH_THRESHOLD		1920
+
+/*
+ * Helper to determine if the current panel is low-resolution (<= FHD).
+ */
+static bool is_low_res_panel(void)
+{
+	const struct hob_graphics_info *ginfo;
+	size_t size;
+
+	/* Find the graphics information HOB */
+	ginfo = fsp_find_extension_hob_by_guid(fsp_graphics_info_guid, &size);
+	if (!ginfo || ginfo->framebuffer_base == 0)
+		return false;
+
+	return ginfo->horizontal_resolution <= FHD_WIDTH_THRESHOLD;
+}
+
+/*
+ * Mainboard-specific override for logo filenames.
+ */
+const char *mainboard_bmp_logo_filename(void)
+{
+	if (is_low_res_panel())
+		return "cb_plus_logo.bmp";
+
+	return "cb_logo.bmp";
+}
 
 /*
  * SKU_ID, TDP (Watts), pl1_min (milliWatts), pl1_max (milliWatts),
@@ -18,9 +50,9 @@
 #define COMMON_PTL_U_POWER_LIMITS	\
 	.pl1_min_power = 10000,		\
 	.pl1_max_power = 15000,		\
-	.pl2_min_power = 50000,		\
-	.pl2_max_power = 50000,		\
-	.pl4_power = 65000
+	.pl2_min_power = 25000,		\
+	.pl2_max_power = 25000,		\
+	.pl4_power = 25000
 const struct cpu_tdp_power_limits power_optimized_limits[] = {
 	{
 		.mch_id = PCI_DID_INTEL_PTL_H_ID_1,
@@ -85,6 +117,18 @@ const struct cpu_tdp_power_limits power_optimized_limits[] = {
 	{
 		.mch_id = PCI_DID_INTEL_PTL_U_ID_3,
 		.cpu_tdp = TDP_15W,
+		.power_limits_index = PTL_CORE_2,
+		COMMON_PTL_U_POWER_LIMITS
+	},
+	{
+		.mch_id = PCI_DID_INTEL_PTL_U_ID_1,
+		.cpu_tdp = TDP_25W,
+		.power_limits_index = PTL_CORE_1,
+		COMMON_PTL_U_POWER_LIMITS
+	},
+	{
+		.mch_id = PCI_DID_INTEL_PTL_U_ID_2,
+		.cpu_tdp = TDP_25W,
 		.power_limits_index = PTL_CORE_2,
 		COMMON_PTL_U_POWER_LIMITS
 	},

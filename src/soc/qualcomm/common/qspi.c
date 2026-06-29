@@ -140,18 +140,25 @@ static void cs_change(enum cs_state state)
 	gpio_set(QSPI_CS, state == CS_DEASSERT);
 }
 
-static void configure_gpios(void)
+/*
+ * Weak implementation for SoC-specific QSPI initialization.
+ * SoC layer might wish to increase the drive strength depending upon
+ * the SPI flash operating frequency.
+ */
+__weak void qspi_configure_gpios(void)
 {
+	uint32_t drive_str = CONFIG_QC_SPI_DRIVE_STRENGTH_MA;
+
 	gpio_output(QSPI_CS, 1);
 
 	gpio_configure(QSPI_DATA_0, GPIO_FUNC_QSPI_DATA_0,
-		GPIO_NO_PULL, GPIO_8MA, GPIO_OUTPUT);
+		GPIO_NO_PULL, drive_str, GPIO_OUTPUT);
 
 	gpio_configure(QSPI_DATA_1, GPIO_FUNC_QSPI_DATA_1,
-		GPIO_NO_PULL, GPIO_8MA, GPIO_OUTPUT);
+		GPIO_NO_PULL, drive_str, GPIO_OUTPUT);
 
 	gpio_configure(QSPI_CLK, GPIO_FUNC_QSPI_CLK,
-		GPIO_NO_PULL, GPIO_8MA, GPIO_OUTPUT);
+		GPIO_NO_PULL, drive_str, GPIO_OUTPUT);
 }
 
 static void queue_bounce_data(uint8_t *data, uint32_t data_bytes,
@@ -247,11 +254,16 @@ static void reg_init(void)
 	write32(&qcom_qspi->rd_fifo_rst, RESET_FIFO);
 }
 
+void qspi_set_bus_clock(uint32_t hz)
+{
+	clock_configure_qspi(hz * 4);
+}
+
 void quadspi_init(uint32_t hz)
 {
 	assert(dcache_line_bytes() == CACHE_LINE_SIZE);
-	clock_configure_qspi(hz * 4);
-	configure_gpios();
+	qspi_set_bus_clock(hz);
+	qspi_configure_gpios();
 	reg_init();
 }
 

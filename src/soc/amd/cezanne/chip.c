@@ -33,7 +33,7 @@ struct device_operations cezanne_pci_domain_ops = {
 	.scan_bus	= amd_pci_domain_scan_bus,
 	.init		= amd_pci_domain_init,
 	.acpi_name	= soc_acpi_name,
-	.acpi_fill_ssdt	= pci_domain_fill_ssdt,
+	.acpi_fill_ssdt	= amd_pci_domain_fill_ssdt,
 };
 
 static void soc_init(void *chip_info)
@@ -57,6 +57,8 @@ struct chip_operations soc_amd_cezanne_ops = {
 	.name = "AMD Cezanne SoC",
 #elif CONFIG(SOC_AMD_RENOIR)
 	.name = "AMD Renoir SoC",
+#elif CONFIG(SOC_AMD_V2000A)
+	.name = "AMD V2000A SoC",
 #endif
 	.init = soc_init,
 	.final = soc_final

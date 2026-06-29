@@ -18,8 +18,8 @@ DefinitionBlock(
 	#include "acpi/platform.asl"
 
 	// global NVS and variables
-	#include <soc/intel/broadwell/pch/acpi/globalnvs.asl>
-	#include <soc/intel/broadwell/acpi/device_nvs.asl>
+	#include <southbridge/intel/wildcatpoint/acpi/globalnvs.asl>
+	#include <southbridge/intel/wildcatpoint/acpi/device_nvs.asl>
 
 	// CPU
 	#include <cpu/intel/common/acpi/cpu.asl>
@@ -28,7 +28,7 @@ DefinitionBlock(
 		Device (PCI0)
 		{
 			#include <northbridge/intel/haswell/acpi/hostbridge.asl>
-			#include <soc/intel/broadwell/pch/acpi/pch.asl>
+			#include <southbridge/intel/lynxpoint/acpi/pch.asl>
 		}
 	}
 

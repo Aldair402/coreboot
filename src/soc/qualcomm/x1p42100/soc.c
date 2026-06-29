@@ -1,12 +1,56 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <bl31.h>
+#include <bootstate.h>
+#include <cbfs.h>
 #include <device/device.h>
 #include <soc/mmu.h>
 #include <soc/mmu_common.h>
 #include <soc/symbols_common.h>
 #include <soc/pcie.h>
+#include <soc/clock.h>
 #include <soc/cpucp.h>
+#include <soc/qspi_common.h>
+#include <soc/variant.h>
 #include <program_loading.h>
+
+#define SPI_BUS_CLOCK_FREQ (50 * MHz)
+
+/*
+ * FIXME: Reduce SPI Frequency to 50-MHz to improve
+ * the platform stability during payload stage.
+ */
+void soc_prepare_bl31_handoff(void)
+{
+	printk(BIOS_WARNING, "%s: Reduce SPI frequency to 50MHz to better stability\n",
+		 __func__);
+	qspi_set_bus_clock(SPI_BUS_CLOCK_FREQ);
+}
+
+static void preload_bl31(void)
+{
+	if (!CONFIG(CBFS_PRELOAD))
+		return;
+
+	cbfs_preload(CONFIG_CBFS_PREFIX"/bl31");
+}
+
+static void preload_bl32(void)
+{
+	if (!CONFIG(CBFS_PRELOAD))
+		return;
+
+	cbfs_preload(CONFIG_CBFS_PREFIX"/secure_os");
+}
+
+/*
+ * Weak implementation of mainboard-specific display initialization.
+ * This can be overridden by mainboard-specific code.
+ */
+__weak void mainboard_soc_init(void)
+{
+	/* Default implementation: do nothing */
+}
 
 static struct device_operations pci_domain_ops = {
 	.read_resources = &qcom_pci_domain_read_resources,
@@ -31,6 +75,7 @@ static void soc_read_resources(struct device *dev)
 		ram_range(dev, index++, (uintptr_t)config[i].offset, config[i].size);
 
 	mmio_range(dev, index++, (uintptr_t)_dram_aop_cmd_db, REGION_SIZE(dram_aop_cmd_db));
+
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_ncc, REGION_SIZE(dram_ncc));
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_cpucp, REGION_SIZE(dram_cpucp));
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_xbl_log, REGION_SIZE(dram_xbl_log));
@@ -48,6 +93,9 @@ static void soc_read_resources(struct device *dev)
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_pdp, REGION_SIZE(dram_pdp));
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_tz_static, REGION_SIZE(dram_tz_static));
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_adsp_rpc_heap, REGION_SIZE(dram_adsp_rpc_heap));
+	reserved_ram_range(dev, index++, (uintptr_t)_dram_pld_pep, REGION_SIZE(dram_pld_pep));
+	reserved_ram_range(dev, index++, (uintptr_t)_dram_pld_gmu, REGION_SIZE(dram_pld_gmu));
+	reserved_ram_range(dev, index++, (uintptr_t)_dram_pld_pdp, REGION_SIZE(dram_pld_pdp));
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_wlan, REGION_SIZE(dram_wlan));
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_pil, REGION_SIZE(dram_pil));
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_ta, REGION_SIZE(dram_ta));
@@ -57,6 +105,9 @@ static void soc_read_resources(struct device *dev)
 			calc_acdb_carveout_size());
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_llcc_lpi, REGION_SIZE(dram_llcc_lpi));
 	reserved_ram_range(dev, index++, (uintptr_t)_dram_smem, REGION_SIZE(dram_smem));
+
+	/* Reserve PCIe region to prevent allocation */
+	mmio_range(dev, index++, (uintptr_t)_pcie, REGION_SIZE(pcie));
 }
 
 static void qtee_fw_config_load(void)
@@ -89,6 +140,8 @@ static void soc_init(struct device *dev)
 {
 	cpucp_fw_load_reset();
 	qtee_fw_config_load();
+	preload_bl31();
+	preload_bl32();
 }
 
 static struct device_operations soc_ops = {
@@ -113,3 +166,14 @@ struct chip_operations soc_qualcomm_x1p42100_ops = {
 	.name = "SOC Qualcomm X1P-42-100",
 	.enable_dev = enable_soc_dev,
 };
+
+static void soc_late_init(void *unused)
+{
+	/* Doing LPASS init late to optimize boot time */
+	lpass_init();
+
+	/* Doing board specific init late to optimize boot time */
+	mainboard_soc_init();
+}
+
+BOOT_STATE_INIT_ENTRY(BS_WRITE_TABLES, BS_ON_ENTRY, soc_late_init, NULL);

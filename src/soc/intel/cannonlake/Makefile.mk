@@ -10,22 +10,15 @@ bootblock-y += bootblock/bootblock.c
 bootblock-y += bootblock/pch.c
 bootblock-y += pmutil.c
 bootblock-y += bootblock/report_platform.c
-bootblock-y += gspi.c
-bootblock-y += i2c.c
 bootblock-y += spi.c
 bootblock-y += lpc.c
 bootblock-y += p2sb.c
-bootblock-y += uart.c
 
 romstage-y += cnl_memcfg_init.c
-romstage-y += gspi.c
-romstage-y += i2c.c
 romstage-y += lpc.c
 romstage-y += pcie_rp.c
 romstage-y += pmutil.c
-romstage-y += reset.c
 romstage-y += spi.c
-romstage-y += uart.c
 
 ramstage-y += acpi.c
 ramstage-y += chip.c
@@ -34,8 +27,6 @@ ramstage-y += elog.c
 ramstage-y += finalize.c
 ramstage-y += fsp_params.c
 ramstage-y += graphics.c
-ramstage-y += gspi.c
-ramstage-y += i2c.c
 ramstage-y += lockdown.c
 ramstage-y += lpc.c
 ramstage-y += nhlt.c
@@ -43,10 +34,8 @@ ramstage-y += p2sb.c
 ramstage-y += pcie_rp.c
 ramstage-y += pmc.c
 ramstage-y += pmutil.c
-ramstage-y += reset.c
 ramstage-y += spi.c
 ramstage-y += systemagent.c
-ramstage-y += uart.c
 ramstage-y += vr_config.c
 ramstage-y += sd.c
 ramstage-y += xhci.c
@@ -55,20 +44,13 @@ smm-y += elog.c
 smm-y += p2sb.c
 smm-y += pmutil.c
 smm-y += smihandler.c
-smm-y += uart.c
 smm-y += xhci.c
 
 postcar-y += pmutil.c
-postcar-y += i2c.c
-postcar-y += gspi.c
 postcar-y += spi.c
-postcar-y += uart.c
 
-verstage-y += gspi.c
-verstage-y += i2c.c
 verstage-y += pmutil.c
 verstage-y += spi.c
-verstage-y += uart.c
 
 ifeq ($(CONFIG_SOC_INTEL_CANNONLAKE_PCH_H),y)
 bootblock-y += gpio_cnp_h.c

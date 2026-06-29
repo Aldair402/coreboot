@@ -88,9 +88,13 @@ static int edp_msg_fifo_tx(unsigned int address, u8 request, void *buffer, size_
 	write32(&edp_phy->aux_interrupt_clr, 0x0);
 
 	reg = 0; /* Transaction number is always 1 */
-	if (!native) /* i2c */
-		reg |= EDP_AUX_TRANS_CTRL_I2C | EDP_AUX_TRANS_CTRL_NO_SEND_ADDR |
-			EDP_AUX_TRANS_CTRL_NO_SEND_STOP;
+	if (!native) { /* i2c */
+		reg |= EDP_AUX_TRANS_CTRL_I2C | EDP_AUX_TRANS_CTRL_NO_SEND_ADDR;
+		/* EDP_AUX_TRANS_CTRL_NO_SEND_STOP should be set ONLY if DP_AUX_I2C_MOT is used. */
+		if (request & DP_AUX_I2C_MOT) {
+			reg |= EDP_AUX_TRANS_CTRL_NO_SEND_STOP;
+		}
+	}
 
 	reg |= EDP_AUX_TRANS_CTRL_GO;
 	write32(&edp_auxclk->aux_trans_ctrl, reg);
@@ -179,7 +183,7 @@ int edp_read_edid(struct edid *out)
 	}
 
 	if (edid[EDID_EXTENSION_FLAG]) {
-		printk(BIOS_ERR, " read EDID ext block.\n");
+		printk(BIOS_INFO, " read EDID ext block.\n");
 		edid_size += EDID_LENGTH;
 		reg_addr = EDID_LENGTH;
 		err = edp_aux_transfer(EDID_I2C_ADDR, DP_AUX_I2C_WRITE, &reg_addr, 1);

@@ -297,6 +297,13 @@ F:	src/mainboard/facebook/monolith/
 
 
 
+FRAMEWORK MAINBOARDS
+M:	Daniel Schaefer <dhs@frame.work>
+S:	Maintained
+F:	src/mainboard/framework/
+
+
+
 FOXCONN MAINBOARDS
 S:	Orphan
 F:	src/mainboard/foxconn/
@@ -332,6 +339,7 @@ M:	Kapil Porwal <kapilporwal@google.com>
 M:	Jakub Czapiga <czapiga@google.com>
 M:	Eran Mitrani <mitrani@google.com>
 M:	Dinesh Gehlot <digehlot@google.com>
+M:	Matt DeVillier <matt.devillier@gmail.com>
 S:	Maintained
 F:	src/mainboard/google/rex/
 
@@ -342,6 +350,7 @@ M:	Eric Lai <ericllai@google.com>
 M:	Kapil Porwal <kapilporwal@google.com>
 M:	Dinesh Gehlot <digehlot@google.com>
 M:	Jayvik Desai <jayvik@google.com>
+M:	Matt DeVillier <matt.devillier@gmail.com>
 S:	Maintained
 F:	src/mainboard/google/brya/
 
@@ -357,6 +366,7 @@ F:	src/mainboard/google/fatcat/
 GOOGLE HATCH MAINBOARDS
 M:	Subrata Banik <subratabanik@google.com>
 M:	Nick Vaccaro <nvaccaro@chromium.org>
+M:	Matt DeVillier <matt.devillier@gmail.com>
 S:	Maintained
 F:	src/mainboard/google/hatch/
 
@@ -368,11 +378,12 @@ F:	src/mainboard/google/ocelot/
 
 GOOGLE VOLTEER MAINBOARDS
 M:	Nick Vaccaro <nvaccaro@chromium.org>
+M:	Matt DeVillier <matt.devillier@gmail.com>
 S:	Maintained
 F:	src/mainboard/google/volteer/
 
 GOOGLE MAINBOARDS (Intel-based, legacy/inactive)
-M:	Matt DeVillier <MrChromebox@gmail.com>
+M:	Matt DeVillier <matt.devillier@gmail.com>
 S:	Maintained
 F:	src/mainboard/google/auron/
 F:	src/mainboard/google/beltino/
@@ -434,6 +445,11 @@ M:	Jeff Daly <jeffd@silicom-usa.com>
 M:	Vanessa Eusebio <vanessa.f.eusebio@intel.com>
 S:	Maintained
 F:	src/mainboard/intel/harcuvar/
+
+INTEL PANTHERLAKE_CRB MAINBOARD
+M:	Alicja Michalska <alicja.michalska@9elements.com>
+S:	Supported
+F:	src/mainboard/intel/pantherlake_crb/
 
 
 
@@ -594,7 +610,7 @@ F:	src/mainboard/roda/
 
 
 SAMSUNG CHROMEOS MAINBOARDS
-M:	Matt DeVillier <MrChromebox@gmail.com>
+M:	Matt DeVillier <matt.devillier@gmail.com>
 S:	Maintained
 F:	src/mainboard/samsung/lumpy/
 F:	src/mainboard/samsung/stumpy/
@@ -630,7 +646,6 @@ F:	src/mainboard/sifive/
 
 STAR LABS MAINBOARDS
 M:	Sean Rhodes <sean@starlabs.systems>
-M:	Matt DeVillier <matt.devillier@gmail.com>
 S:	Maintained
 F:	src/mainboard/starlabs/
 
@@ -872,6 +887,14 @@ M:	Felix Held <felix-coreboot@felixheld.de>
 S:	Odd Fixes
 F:	src/soc/amd/stoneyridge/
 
+AMD Strix Halo
+M:	Anand Vaikar <a.vaikar2021@gmail.com>
+M:	David Milosevic <David.Milosevic@9elements.com>
+M:	Felix Held <felix-coreboot@felixheld.de>
+S:	Maintained
+F:	src/soc/amd/strix_halo/
+F:	src/vendorcode/amd/fsp/strix_halo/
+
 INTEL ALDERLAKE SOC
 M:	Subrata Banik <subratabanik@google.com>
 M:	Nick Vaccaro <nvaccaro@chromium.org>
@@ -927,12 +950,14 @@ M:	Pranava Y N <pranavayn@google.com>
 M:	Jayvik Desai <jayvik@google.com>
 M:	Avi Uday <aviuday@google.com>
 M:	Dinesh Gehlot <digehlot@google.com>
+M:	Alicja Michalska <alicja.michalska@9elements.com>
 S:	Maintained
 F:	src/soc/intel/pantherlake/
 
 INTEL TIGERLAKE SOC
 M:	Subrata Banik <subratabanik@google.com>
 M:	Nick Vaccaro <nvaccaro@chromium.org>
+M:	Alicja Michalska <alicja.michalska@9elements.com>
 S:	Maintained
 F:	src/soc/intel/tigerlake/
 
@@ -963,6 +988,7 @@ MEDIATEK SOCS
 M:	Hung-Te Lin <hungte@chromium.org>
 M:	Yu-Ping Wu <yupingso@google.com>
 M:	Yidi Lin <yidilin@google.com>
+M:	Chen-Tsung Hsieh <chentsung@google.com>
 S:	Supported
 F:	src/soc/mediatek/
 
@@ -1032,6 +1058,11 @@ ABUILD
 M:	Martin Roth <gaumless@gmail.com>
 S:	Supported
 F:	util/abuild/
+
+AUTOPORT
+M:	Nicholas Chin <nic.c3.14@gmail.com>
+S:	Maintained
+F:	util/autoport/
 
 BOARD STATUS
 F:	util/board_status/
@@ -1210,7 +1241,7 @@ M:	Felix Singer <felixsinger@posteo.net>
 M:	Jason Glenesk <jason.glenesk@gmail.com>
 M:	Angel Pons <th3fanbus@gmail.com>
 M:	Martin Roth <gaumless@gmail.com>
-M:	Matt DeVillier <MrChromebox@gmail.com>
+M:	Matt DeVillier <matt.devillier@gmail.com>
 S:	Maintained
 F:	Documentation/releases/
 F:	util/release/

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <baseboard/gpio.h>
+#include <baseboard/panel.h>
 #include <bootmode.h>
 #include <console/console.h>
 #include <device/device.h>
@@ -11,9 +13,6 @@
 #include <soc/msdc.h>
 #include <soc/spm.h>
 #include <soc/usb.h>
-
-#include "gpio.h"
-#include "panel.h"
 
 static void configure_alc1019(void)
 {
@@ -71,7 +70,7 @@ static void mainboard_init(struct device *dev)
 		register_reset_to_bl31(GPIO_RESET.id, true);
 
 	if (display_init_required()) {
-		if (mtk_display_init() < 0)
+		if (mtk_display_init(NULL) < 0)
 			printk(BIOS_ERR, "%s: Failed to init display\n", __func__);
 	} else {
 		if (CONFIG(BOARD_GOOGLE_STARYU_COMMON)) {

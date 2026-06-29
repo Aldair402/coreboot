@@ -484,7 +484,6 @@ static uint16_t get_vccin_aux_imon_iccmax(const struct soc_intel_alderlake_confi
 	case PCI_DID_INTEL_ADL_P_ID_6:
 	case PCI_DID_INTEL_ADL_P_ID_7:
 	case PCI_DID_INTEL_ADL_P_ID_8:
-	case PCI_DID_INTEL_ADL_P_ID_9:
 	case PCI_DID_INTEL_ADL_P_ID_10:
 	case PCI_DID_INTEL_RPL_P_ID_1:
 	case PCI_DID_INTEL_RPL_P_ID_2:
@@ -535,6 +534,7 @@ static uint16_t get_vccin_aux_imon_iccmax(const struct soc_intel_alderlake_confi
 	case PCI_DID_INTEL_RPL_S_ID_3:
 	case PCI_DID_INTEL_RPL_S_ID_4:
 	case PCI_DID_INTEL_RPL_S_ID_5:
+	case PCI_DID_INTEL_RPL_S_ID_6:
 		return ICC_MAX_RPL_S;
 	default:
 		printk(BIOS_ERR, "Unknown MCH ID: 0x%4x, skipping VccInAuxImonIccMax config\n",
@@ -967,8 +967,8 @@ static void fill_fsps_pcie_params(FSP_S_CONFIG *s_cfg,
 		s_cfg->PcieRpHotPlug[i] = !!(rp_cfg->flags & PCIE_RP_HOTPLUG)
 				|| CONFIG(SOC_INTEL_COMPLIANCE_TEST_MODE);
 		s_cfg->PcieRpClkReqDetect[i] = !!(rp_cfg->flags & PCIE_RP_CLK_REQ_DETECT);
-		/* PcieRpSlotImplemented default to 1 (slot implemented) in FSP; 0: built-in */
-		if (!!(rp_cfg->flags & PCIE_RP_BUILT_IN))
+		/* PcieRpSlotImplemented defaults to 1 (slot implemented) in FSP; 0: built-in */
+		if (rp_cfg->flags & PCIE_RP_BUILT_IN)
 			s_cfg->PcieRpSlotImplemented[i] = false;
 		s_cfg->PcieRpDetectTimeoutMs[i] = rp_cfg->pcie_rp_detect_timeout_ms;
 		configure_pch_rp_power_management(s_cfg, rp_cfg, i);

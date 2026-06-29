@@ -795,6 +795,15 @@ int rtc_get(struct rtc_time *time)
 }
 #endif
 
+int google_chromeec_offmode_heartbeat(void)
+{
+	struct chromeec_command cmd = {
+		.cmd_code = EC_CMD_ENABLE_OFFMODE_HEARTBEAT,
+	};
+
+	return google_chromeec_command(&cmd);
+}
+
 int google_chromeec_reboot(enum ec_reboot_cmd type, uint8_t flags)
 {
 	const struct ec_params_reboot_ec params = {
@@ -807,8 +816,16 @@ int google_chromeec_reboot(enum ec_reboot_cmd type, uint8_t flags)
 
 void google_chromeec_ap_poweroff(void)
 {
-	if (ec_cmd_ap_shutdown(PLAT_EC))
-		printk(BIOS_ERR, "Failed to power off the AP.\n");
+	if (ec_cmd_ap_shutdown(PLAT_EC)) {
+		printk(BIOS_ERR, "Standard shutdown failed. Trying forced AP Off...\n");
+		/*
+		 * Fallback (2nd attempt): If the standard shutdown command fails,
+		 * force a cold reboot with the 'AP OFF' flag. This is a more
+		 * aggressive hardware-level trigger to ensure the system doesn't
+		 * remain powered on in an undefined state.
+		 */
+		google_chromeec_reboot(EC_REBOOT_COLD_AP_OFF, 0);
+	}
 	halt();
 }
 
@@ -1175,6 +1192,14 @@ bool google_chromeec_is_charger_present(void)
 	/* Check if the EC has posted the AC connect event. */
 	return !!(google_chromeec_get_events_b() &
 		  EC_HOST_EVENT_MASK(EC_HOST_EVENT_AC_CONNECTED));
+}
+
+/* This API checks if RTC event. */
+bool google_chromeec_is_rtc_event(void)
+{
+	/* Check if the Chrome EC has an active RTC event. */
+	return !!(google_chromeec_get_events_b() &
+		  EC_HOST_EVENT_MASK(EC_HOST_EVENT_RTC));
 }
 
 /*
@@ -1854,6 +1879,22 @@ bool google_chromeec_is_battery_present(void)
 	return false;
 }
 
+bool google_chromeec_is_battery_data_valid(void)
+{
+	struct ec_params_battery_dynamic_info params = {
+		.index = 0,
+	};
+	struct ec_response_battery_dynamic_info resp;
+
+	if (ec_cmd_battery_get_dynamic(PLAT_EC, &params, &resp) == 0) {
+		/* Check if battery data is valid */
+		if (resp.flags & EC_BATT_FLAG_INVALID_DATA)
+			return false;
+	}
+
+	return true;
+}
+
 /*
  * Performs early power off.
  *
@@ -1913,7 +1954,13 @@ static int google_chromeec_read_batt_state_of_charge_raw(uint32_t *state)
 	if (resp.full_capacity <= 0)
 		return -1;
 
-	uint32_t soc = (uint32_t)resp.remaining_capacity * 100 / (uint32_t)resp.full_capacity;
+	/*
+	 * Integer Ceiling Math Formula: (X + Y - 1) / Y
+	 * This forces any fractional remainder to push up to the next integer.
+	 */
+	uint64_t numerator = ((uint64_t)resp.remaining_capacity * 100) +
+				 (uint64_t)resp.full_capacity - 1;
+	uint32_t soc = (uint32_t)(numerator / (uint64_t)resp.full_capacity);
 
 	/* Clamp the value to 100% (some fuel gauges report slight overflows) */
 	if (soc > 100)
@@ -1944,6 +1991,73 @@ int google_chromeec_read_batt_state_of_charge(uint32_t *state)
 		ret = google_chromeec_read_batt_state_of_charge_cmd(state);
 
 	return ret;
+}
+
+/*
+ * Reads remaining battery capacity.
+ * capacity: Pointer to store the remaining capacity in mAh.
+ *
+ * Return: 0 on success, -1 on failure.
+ */
+int google_chromeec_read_batt_remaining_capacity(uint32_t *capacity)
+{
+	struct ec_params_battery_dynamic_info params = {
+		.index = 0,
+	};
+	struct ec_response_battery_dynamic_info resp;
+
+	/* Send command to Chrome EC to query dynamic battery parameters */
+	if (ec_cmd_battery_get_dynamic(PLAT_EC, &params, &resp) != 0)
+		return -1;
+
+	/* Sanity check: Ensure remaining capacity is non-negative and valid */
+	if (resp.remaining_capacity < 0)
+		return -1;
+
+	*capacity = (uint32_t)resp.remaining_capacity;
+
+	return 0;
+}
+
+/*
+ * Query the EC for the Battery MISC Information.
+ *
+ * Sends a host command to the ChromeOS Embedded Controller to retrieve the status
+ * of the battery's charging field-effect transistor (CFET) at index 0 and battery
+ * status.
+ *
+ * Return: 0 on success, or -1 if the command fails or is
+ *         unsupported by the current EC firmware version.
+ */
+int google_chromeec_get_battery_misc_info(struct ec_response_battery_get_misc_info *resp)
+{
+	const struct ec_params_battery_get_misc_info params = {
+		.index = 0
+	};
+
+	struct chromeec_command cmd = {
+		.cmd_code = EC_CMD_BATTERY_GET_MISC_INFO,
+		.cmd_version = 0,
+		.cmd_size_in = sizeof(params),
+		.cmd_data_in = &params,
+		.cmd_size_out = sizeof(struct ec_response_battery_get_misc_info),
+		.cmd_data_out = resp,
+		.cmd_dev_index = 0,
+	};
+
+	int rv;
+
+	rv = google_chromeec_command(&cmd);
+
+	if (rv != 0 && (cmd.cmd_code == EC_RES_INVALID_COMMAND ||
+				cmd.cmd_code == EC_RES_INVALID_PARAM)) {
+		printk(BIOS_INFO, "BATTERY_GET_CFET_STATUS not supported by EC.\n");
+		return -1;
+	} else if (rv != 0) {
+		return -1;
+	}
+
+	return 0;
 }
 
 /*
@@ -1983,6 +2097,85 @@ int google_chromeec_set_lightbar_rgb(unsigned int led, int red, int green,
 }
 
 /*
+ * Sends a command to turn off the Chrome EC lightbar.
+ *
+ * This function packages a LIGHTBAR_CMD_OFF sub-command into a standard
+ * EC_CMD_LIGHTBAR_CMD packet.
+ *
+ * @return 0 on success, non-zero error code from the EC transport on failure.
+ */
+int google_chromeec_lightbar_off(void)
+{
+	const struct ec_params_lightbar req = {
+		.cmd = LIGHTBAR_CMD_OFF,
+	};
+
+	struct chromeec_command cmd = {
+		.cmd_code = EC_CMD_LIGHTBAR_CMD,
+		.cmd_size_out = 0,
+		.cmd_data_out = NULL,
+		.cmd_size_in = sizeof(req),
+		.cmd_data_in = &req,
+	};
+
+	return google_chromeec_command(&cmd);
+}
+
+/*
+ * Sends a command to enable the Chrome EC lightbar.
+ *
+ * This function wraps the LIGHTBAR_CMD_ON sub-command into a standard
+ * EC_CMD_LIGHTBAR_CMD host command.
+ *
+ * @return 0 on success, or a non-zero EC transport error code on failure.
+ */
+int google_chromeec_lightbar_on(void)
+{
+	const struct ec_params_lightbar req = {
+		.cmd = LIGHTBAR_CMD_ON,
+	};
+
+	struct chromeec_command cmd = {
+		.cmd_code = EC_CMD_LIGHTBAR_CMD,
+		.cmd_size_out = 0,
+		.cmd_data_out = NULL,
+		.cmd_size_in = sizeof(req),
+		.cmd_data_in = &req,
+	};
+
+	return google_chromeec_command(&cmd);
+}
+
+/*
+ * Sends a command to set the Chrome EC lightbar sequence.
+ *
+ * This function wraps the LIGHTBAR_CMD_SEQ sub-command into a standard
+ * EC_CMD_LIGHTBAR_CMD host command to trigger a predefined LED pattern.
+ *
+ * @param seq_num The sequence number to trigger.
+ * @return 0 on success, or a non-zero EC transport error code on failure.
+ */
+int google_chromeec_lightbar_sequence(uint8_t seq_num)
+{
+	const struct ec_params_lightbar req = {
+		.cmd = LIGHTBAR_CMD_SEQ,
+		.seq = {
+			.num = seq_num,
+		},
+	};
+
+	struct chromeec_command cmd = {
+		.cmd_code = EC_CMD_LIGHTBAR_CMD,
+		.cmd_size_out = 0,
+		.cmd_data_out = NULL,
+		.cmd_size_in = sizeof(req),
+		.cmd_data_in = &req,
+	};
+
+	return google_chromeec_command(&cmd);
+}
+
+/*
  * Check if the battery is critically low and not currently charging.
  *
  * Return true if battery is below threshold and AC is not present.
@@ -1992,3 +2185,37 @@ bool google_chromeec_is_critically_low_on_battery(void)
 	return google_chromeec_is_below_critical_threshold() &&
 	       !google_chromeec_is_charger_present();
 }
+
+#if !CONFIG(EC_GOOGLE_CHROMEEC_LPC)
+static int google_chromeec_read_memmap(uint8_t offset, uint8_t size, void *dest)
+{
+	struct ec_params_read_memmap params;
+
+	params.offset = offset;
+	params.size = size;
+
+	struct chromeec_command cmd = {
+		.cmd_code = EC_CMD_READ_MEMMAP,
+		.cmd_version = 0,
+		.cmd_data_in = &params,
+		.cmd_data_out = dest,
+		.cmd_size_in = sizeof(params),
+		.cmd_size_out = size,
+	};
+
+	return google_chromeec_command(&cmd);
+}
+
+/*
+ * Return the byte of EC switch states e.g. lid state
+ */
+uint8_t google_chromeec_get_switches(void)
+{
+	uint8_t flags;
+
+	if (google_chromeec_read_memmap(EC_MEMMAP_SWITCHES, sizeof(flags), &flags))
+		return 0;
+
+	return flags;
+}
+#endif

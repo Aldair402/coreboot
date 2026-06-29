@@ -6,9 +6,6 @@ Device (XHCI)
 {
 	Name (_ADR, 0x00140000)
 
-	Name (PLSD, 5) // Port Link State - RxDetect
-	Name (PLSP, 7) // Port Link State - Polling
-
 	OperationRegion (XPRT, PCI_Config, 0, 0x100)
 	Field (XPRT, AnyAcc, NoLock, Preserve)
 	{
@@ -41,6 +38,7 @@ Device (XHCI)
 		PR3M, 32,  // USB3PRM
 	}
 
+#if CONFIG(INTEL_LYNXPOINT_LP)
 	// Clear status bits
 	Method (LPCL, 0, Serialized)
 	{
@@ -57,27 +55,24 @@ Device (XHCI)
 			PSC3, 32,
 		}
 
-		// Port Enabled/Disabled (Bit 1)
-		Name (PEDB, 1 << 1)
-
-		// Change Status (Bits 23:17)
-		Name (CHST, 0x7f << 17)
+#define PSC_PORT_ENABLED	(1 << 1)
+#define PSC_PORT_CHANGE_BITS	(0x7f << 17)
 
 		// Port 0
-		Local0 = PSC0 & ~PEDB
-		PSC0 = Local0 | CHST
+		Local0 = PSC0 & ~PSC_PORT_ENABLED
+		PSC0 = Local0 | PSC_PORT_CHANGE_BITS
 
 		// Port 1
-		Local0 = PSC1 & ~PEDB
-		PSC1 = Local0 | CHST
+		Local0 = PSC1 & ~PSC_PORT_ENABLED
+		PSC1 = Local0 | PSC_PORT_CHANGE_BITS
 
 		// Port 2
-		Local0 = PSC2 & ~PEDB
-		PSC2 = Local0 | CHST
+		Local0 = PSC2 & ~PSC_PORT_ENABLED
+		PSC2 = Local0 | PSC_PORT_CHANGE_BITS
 
 		// Port 3
-		Local0 = PSC3 & ~PEDB
-		PSC3 = Local0 | CHST
+		Local0 = PSC3 & ~PSC_PORT_ENABLED
+		PSC3 = Local0 | PSC_PORT_CHANGE_BITS
 	}
 
 	Method (LPS0, 0, Serialized)
@@ -127,10 +122,12 @@ Device (XHCI)
 			WPR4, 1,	// [31] Warm Port Reset
 		}
 
+#define PLS_POLLING 7
+
 		// Wait for all powered ports to finish polling
 		Local0 = 10
-		While ((PPR1 == 1 && PLS1 == PLSP || PPR2 == 1 && PLS2 == PLSP) ||
-		       (PPR3 == 1 && PLS3 == PLSP || PPR4 == 1 && PLS4 == PLSP))
+		While ((PPR1 == 1 && PLS1 == PLS_POLLING || PPR2 == 1 && PLS2 == PLS_POLLING) ||
+		       (PPR3 == 1 && PLS3 == PLS_POLLING || PPR4 == 1 && PLS4 == PLS_POLLING))
 		{
 			If (Local0 == 0) {
 				Break
@@ -151,19 +148,21 @@ Device (XHCI)
 		Local3 = 0
 		Local4 = 0
 
-		If (PLS1 == PLSD && (CSC1 == 0 && PPR1 == 1)) {
+#define PLS_RX_DETECT 5
+
+		If (PLS1 == PLS_RX_DETECT && (CSC1 == 0 && PPR1 == 1)) {
 			WPR1 = 1	// Issue warm reset
 			Local1 = 1
 		}
-		If (PLS2 == PLSD && (CSC2 == 0 && PPR2 == 1)) {
+		If (PLS2 == PLS_RX_DETECT && (CSC2 == 0 && PPR2 == 1)) {
 			WPR2 = 1	// Issue warm reset
 			Local2 = 1
 		}
-		If (PLS3 == PLSD && (CSC3 == 0 && PPR3 == 1)) {
+		If (PLS3 == PLS_RX_DETECT && (CSC3 == 0 && PPR3 == 1)) {
 			WPR3 = 1	// Issue warm reset
 			Local3 = 1
 		}
-		If (PLS4 == PLSD && (CSC4 == 0 && PPR4 == 1)) {
+		If (PLS4 == PLS_RX_DETECT && (CSC4 == 0 && PPR4 == 1)) {
 			WPR4 = 1	// Issue warm reset
 			Local4 = 1
 		}
@@ -183,6 +182,7 @@ Device (XHCI)
 		// Clear status bits in all ports
 		LPCL ()
 	}
+#endif
 
 	Method (_PSC, 0, NotSerialized)
 	{
@@ -256,12 +256,6 @@ Device (XHCI)
 		^SAIP = 0
 #endif
 
-		// Clear PCI CFG offset 0x40[11]
-		^SWAI = 0
-
-		// Clear PCI CFG offset 0x44[13:12]
-		^SAIP = 0
-
 		Return ()
 	}
 
@@ -332,12 +326,6 @@ Device (XHCI)
 		^SAIP = 1
 #endif
 
-		// Set PCI CFG offset 0x40[11]
-		^SWAI = 1
-
-		// Set PCI CFG offset 0x44[13:12]
-		^SAIP = 1
-
 		// Put device in D3
 		^D0D3 = 3
 
@@ -364,18 +352,18 @@ Device (XHCI)
 
 		// GPLD: Generate Port Location Data (PLD)
 		Method (GPLD, 1, Serialized) {
-			Name (PCKG, Package () {
+			Local0 = Package () {
 				Buffer (0x10) {}
-			})
+			}
 
 			// REV: Revision 2 for ACPI 5.0
-			CreateField (DerefOf (PCKG [0]), 0, 7, REV)
+			CreateField (DerefOf (Local0[0]), 0, 7, REV)
 			REV = 2
 
 			// VISI: Port visibility to user per port
-			CreateField (DerefOf (PCKG [0]), 0x40, 1, VISI)
+			CreateField (DerefOf (Local0[0]), 0x40, 1, VISI)
 			VISI = Arg0
-			Return (PCKG)
+			Return (Local0)
 		}
 
 		Device (PRT1) { Name (_ADR, 1) } // USB Port 0

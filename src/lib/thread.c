@@ -3,12 +3,18 @@
 #include <assert.h>
 #include <bootstate.h>
 #include <console/console.h>
+#include <lib.h>
+#include <memlayout.h>
 #include <smp/node.h>
 #include <thread.h>
 #include <timer.h>
 #include <types.h>
 
-static u8 thread_stacks[CONFIG_STACK_SIZE * CONFIG_NUM_THREADS] __aligned(sizeof(uint64_t));
+_Static_assert(CONFIG_THREAD_STACK_SIZE > 0, "THREAD_STACK_SIZE is not set");
+_Static_assert(IS_ALIGNED(CONFIG_THREAD_STACK_SIZE, ARCH_STACK_ALIGN_SIZE),
+	       "THREAD_STACK_SIZE is not aligned to ARCH_STACK_ALIGN_SIZE");
+
+static u8 thread_stacks[CONFIG_THREAD_STACK_SIZE * CONFIG_NUM_THREADS] __aligned(ARCH_STACK_ALIGN_SIZE);
 static bool initialized;
 
 static void idle_thread_init(void);
@@ -21,8 +27,8 @@ static struct thread all_threads[TOTAL_NUM_THREADS];
 
 /* All runnable (but not running) and free threads are kept on their
  * respective lists. */
-static struct thread *runnable_threads;
-static struct thread *free_threads;
+static struct list_node runnable_threads;
+static struct list_node free_threads;
 
 static struct thread *active_thread;
 
@@ -45,25 +51,20 @@ static inline struct thread *current_thread(void)
 	return active_thread;
 }
 
-static inline int thread_list_empty(struct thread **list)
+static inline struct thread *pop_thread(struct list_node *head)
 {
-	return *list == NULL;
+	struct list_node *node;
+
+	node = list_pop(head);
+	if (node == NULL)
+		return NULL;
+
+	return container_of(node, struct thread, list_node);
 }
 
-static inline struct thread *pop_thread(struct thread **list)
+static inline void push_thread(struct list_node *head, struct thread *t)
 {
-	struct thread *t;
-
-	t = *list;
-	*list = t->next;
-	t->next = NULL;
-	return t;
-}
-
-static inline void push_thread(struct thread **list, struct thread *t)
-{
-	t->next = *list;
-	*list = t;
+	list_append(&t->list_node, head);
 }
 
 static inline void push_runnable(struct thread *t)
@@ -80,10 +81,9 @@ static inline struct thread *get_free_thread(void)
 {
 	struct thread *t;
 
-	if (thread_list_empty(&free_threads))
-		return NULL;
-
 	t = pop_thread(&free_threads);
+	if (t == NULL)
+		return NULL;
 
 	/* Reset the current stack value to the original. */
 	if (!t->stack_orig)
@@ -116,9 +116,9 @@ static void schedule(struct thread *t)
 
 	/* If t is NULL need to find new runnable thread. */
 	if (t == NULL) {
-		if (thread_list_empty(&runnable_threads))
-			die("Runnable thread list is empty!\n");
 		t = pop_runnable();
+		if (t == NULL)
+			die("Runnable thread list is empty!\n");
 	} else {
 		/* current is still runnable. */
 		push_runnable(current);
@@ -232,8 +232,8 @@ thread_yield_timed_callback(struct timeout_callback *tocb,
 static void *thread_alloc_space(struct thread *t, size_t bytes)
 {
 	/* Allocate the amount of space on the stack keeping the stack
-	 * aligned to the pointer size. */
-	t->stack_current -= ALIGN_UP(bytes, sizeof(uintptr_t));
+	 * aligned to the architecture requirement. */
+	t->stack_current -= ALIGN_UP(bytes, ARCH_STACK_ALIGN_SIZE);
 
 	return (void *)t->stack_current;
 }
@@ -255,12 +255,15 @@ static void threads_initialize(void)
 	t->id = 0;
 	t->can_yield = 1;
 
-	stack_top = &thread_stacks[CONFIG_STACK_SIZE];
+	for (i = 0; i < sizeof(thread_stacks) / sizeof(u32); i++)
+		((u32 *)thread_stacks)[i] = 0xDEADBEEF;
+
+	stack_top = &thread_stacks[CONFIG_THREAD_STACK_SIZE];
 	for (i = 1; i < TOTAL_NUM_THREADS; i++) {
 		t = &all_threads[i];
 		t->stack_orig = (uintptr_t)stack_top;
 		t->id = i;
-		stack_top += CONFIG_STACK_SIZE;
+		stack_top += CONFIG_THREAD_STACK_SIZE;
 		free_thread(t);
 	}
 
@@ -353,6 +356,23 @@ int thread_yield_microseconds(unsigned int microsecs)
 		return -1;
 
 	return 0;
+}
+
+int thread_check_stacks(void)
+{
+	int i;
+	int ret = 0;
+
+	if (!initialized)
+		return 0;
+
+	for (i = 1; i < TOTAL_NUM_THREADS; i++) {
+		struct thread *t = &all_threads[i];
+		printk(BIOS_SPEW, "Check thread %d stack:\n", i);
+		ret |= _checkstack((void *)t->stack_orig, CONFIG_THREAD_STACK_SIZE, 0);
+	}
+
+	return ret;
 }
 
 void thread_coop_enable(void)

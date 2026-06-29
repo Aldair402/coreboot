@@ -2,24 +2,20 @@
 
 #include <device/azalia_device.h>
 
-const u32 cim_verb_data[] = {
-	/* Realtek, ALC245 */
-	0x10ec0245, /* Vendor ID */
-	0x1558a763, /* Subsystem ID */
-	40, /* Number of entries */
+static const u32 realtek_alc245_verbs[] = {
 	//AZALIA_SUBVENDOR(0, 0x1558a763),
 	AZALIA_SUBVENDOR(0, 0x1558a743),
 	AZALIA_RESET(1),
 	AZALIA_PIN_CFG(0, 0x12, 0x90a60130),
 	AZALIA_PIN_CFG(0, 0x13, 0x40000000),
 	AZALIA_PIN_CFG(0, 0x14, 0x90170110),
-	AZALIA_PIN_CFG(0, 0x17, 0x411111f0),
-	AZALIA_PIN_CFG(0, 0x18, 0x411111f0),
-	AZALIA_PIN_CFG(0, 0x19, 0x411111f0),
-	AZALIA_PIN_CFG(0, 0x1a, 0x411111f0),
-	AZALIA_PIN_CFG(0, 0x1b, 0x411111f0),
+	AZALIA_PIN_CFG(0, 0x17, AZALIA_PIN_CFG_NC(0)),
+	AZALIA_PIN_CFG(0, 0x18, AZALIA_PIN_CFG_NC(0)),
+	AZALIA_PIN_CFG(0, 0x19, AZALIA_PIN_CFG_NC(0)),
+	AZALIA_PIN_CFG(0, 0x1a, AZALIA_PIN_CFG_NC(0)),
+	AZALIA_PIN_CFG(0, 0x1b, AZALIA_PIN_CFG_NC(0)),
 	AZALIA_PIN_CFG(0, 0x1d, 0x40789b2d),
-	AZALIA_PIN_CFG(0, 0x1e, 0x411111f0),
+	AZALIA_PIN_CFG(0, 0x1e, AZALIA_PIN_CFG_NC(0)),
 	AZALIA_PIN_CFG(0, 0x21, 0x04211020),
 
 	0x05b50006, 0x05b40011, 0x0205001a, 0x0204810b,
@@ -52,6 +48,18 @@ const u32 cim_verb_data[] = {
 
 	// XXX: Duplicate last 2 u32s to keep in 4-dword blocks
 	0x01470c02, 0x01470c02,
+};
+
+struct azalia_codec mainboard_azalia_codecs[] = {
+	{
+		.name         = "Realtek ALC245",
+		.vendor_id    = 0x10ec0245,
+		.subsystem_id = 0x1558a763,
+		.address      = 0,
+		.verbs        = realtek_alc245_verbs,
+		.verb_count   = ARRAY_SIZE(realtek_alc245_verbs),
+	},
+	{ /* terminator */ }
 };
 
 const u32 pc_beep_verbs[] = {};

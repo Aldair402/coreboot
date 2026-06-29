@@ -15,9 +15,7 @@ config BOARD_STARLABS_STARFIGHTER_SERIES
 	select EC_STARLABS_MERLIN
 	select HAVE_ACPI_RESUME
 	select HAVE_ACPI_TABLES
-	select HAVE_CMOS_DEFAULT
 	select HAVE_HDA_DMIC
-	select HAVE_OPTION_TABLE
 	select HAVE_SPD_IN_CBFS
 	select INTEL_GMA_HAVE_VBT
 	select INTEL_LPSS_UART_FOR_CONSOLE
@@ -34,6 +32,7 @@ config BOARD_STARLABS_STARFIGHTER_SERIES
 	select SYSTEM_TYPE_LAPTOP
 	select TPM_MEASURED_BOOT
 	select VALIDATE_INTEL_DESCRIPTOR
+	select STARLABS_NVME_POWER_SEQUENCE
 
 config BOARD_STARLABS_STARFIGHTER_RPL
 	select BOARD_STARLABS_STARFIGHTER_SERIES
@@ -48,10 +47,6 @@ config BOARD_STARLABS_STARFIGHTER_MTL
 	select SOC_INTEL_METEORLAKE_U_H
 
 if BOARD_STARLABS_STARFIGHTER_SERIES
-
-config BOARD_USES_FIXED_MODE_VBT
-	bool
-	default y
 
 config CCD_PORT
 	int
@@ -81,10 +76,6 @@ config EC_STARLABS_BATTERY_OEM
 config EC_STARLABS_ITE_BIN_PATH
 	string
 	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/\$(CONFIG_VARIANT_DIR)/ec.bin"
-
-config EDK2_BOOTSPLASH_FILE
-	string
-	default "3rdparty/blobs/mainboard/starlabs/Logo.bmp"
 
 config FMDFILE
 	default "src/mainboard/\$(CONFIG_MAINBOARD_DIR)/variants/\$(CONFIG_VARIANT_DIR)/vboot.fmd" if VBOOT
@@ -122,11 +113,7 @@ config SOC_INTEL_CSE_SEND_EOP_EARLY
 config TME_KEY_REGENERATION_ON_WARM_BOOT
 	default n
 
-config TJ_MAX
-	int
-	default 110
-
-config PL4_WATTS
+config MB_STARLABS_PL4_WATTS
 	int
 	default 80
 

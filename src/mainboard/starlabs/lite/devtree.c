@@ -2,7 +2,7 @@
 
 #include <cpu/intel/turbo.h>
 #include <device/device.h>
-#include <device/pci_def.h>
+#include <devtree_update.h>
 #include <option.h>
 #include <static.h>
 #include <types.h>
@@ -11,7 +11,7 @@
 
 #include "soc/intel/apollolake/chip.h"
 
-void devtree_update(void)
+void mb_devtree_update(void)
 {
 	config_t *cfg = config_of_soc();
 

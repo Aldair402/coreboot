@@ -19,6 +19,7 @@
 #define QCLIB_TE_DDR_INFORMATION   "ddr_information"
 #define QCLIB_TE_QCLIB_LOG_BUFFER  "qclib_log_buffer"
 #define QCLIB_TE_DCB_SETTINGS      "dcb_settings"
+#define QCLIB_TE_DELTA_DCB_SETTINGS "delta_dcb_settings"
 #define QCLIB_TE_CDT_SETTINGS      "cdt_settings"
 #define QCLIB_TE_PMIC_SETTINGS     "pmic_settings"
 #define QCLIB_TE_DDR_TRAINING_DATA "ddr_training_data"
@@ -41,6 +42,7 @@ enum qclib_cbfs_file {
 	QCLIB_CBFS_QCSDI,
 	QCLIB_CBFS_QCLIB,
 	QCLIB_CBFS_DCB,
+	QCLIB_CBFS_DELTA_DCB,
 	QCLIB_CBFS_DTB,
 	QCLIB_CBFS_CPR,
 	QCLIB_CBFS_SHRM_META,
@@ -87,6 +89,7 @@ void qclib_add_if_table_entry(const char *name, void *base,
 void qclib_load_and_run(void);
 void qclib_rerun(void);
 int  qclib_soc_override(struct qclib_cb_if_table *table);
+const char *qclib_override_soc_file(enum qclib_cbfs_file file);
 int  qclib_mainboard_override(struct qclib_cb_if_table *table);
 bool qclib_check_dload_mode(void);
 

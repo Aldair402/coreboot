@@ -54,7 +54,13 @@ uint64_t fw_config_get(void)
 				__func__);
 	}
 
+	fw_config_get_mainboard_override(&fw_config_value);
+
 	return fw_config_value;
+}
+
+void __weak fw_config_get_mainboard_override(uint64_t *fw_config)
+{
 }
 
 uint64_t fw_config_get_field(const struct fw_config_field *field)
@@ -72,8 +78,28 @@ uint64_t fw_config_get_field(const struct fw_config_field *field)
 	return value;
 }
 
+void fw_config_value_set_field(uint64_t *fw_config,
+			       const struct fw_config_field *field,
+			       uint64_t value)
+{
+	const int shift = __ffs64(field->mask);
+	*fw_config &= ~field->mask;
+	*fw_config |= (value << shift) & field->mask;
+}
+
+bool __weak fw_config_probe_mainboard_override(const struct fw_config *match, bool *result)
+{
+	return false;
+}
+
 bool fw_config_probe(const struct fw_config *match)
 {
+	bool result;
+
+	/* Give mainboard a chance to override this probe */
+	if (fw_config_probe_mainboard_override(match, &result))
+		return result;
+
 	/* If fw_config is not provisioned, then there is nothing to match. */
 	if (!fw_config_is_provisioned())
 		return false;

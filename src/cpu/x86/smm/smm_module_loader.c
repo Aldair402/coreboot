@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <acpi/acpi.h>
 #include <acpi/acpi_gnvs.h>
 #include <cbmem.h>
 #include <commonlib/helpers.h>
@@ -366,6 +367,43 @@ static void setup_smihandler_params(struct smm_runtime *mod_params,
 		mod_params->smmstore_com_buffer_base = (uintptr_t)ptr;
 		mod_params->smmstore_com_buffer_size = info.block_size;
 	}
+
+#if CONFIG(SMM_OPAL_S3_SCRATCH_CBMEM)
+	/*
+	 * Provide a small, coreboot-managed CBMEM scratch region for SMM code.
+	 * CBMEM is reserved in the memory map, and persists across S3, making
+	 * it suitable for firmware-owned DMA buffers on resume. SMRAM is not
+	 * accessible to devices for DMA, so this scratch buffer must live
+	 * outside SMRAM.
+	 */
+	const size_t opal_s3_scratch_size = CONFIG_SMM_OPAL_S3_SCRATCH_SIZE;
+	void *scratch = cbmem_add(CBMEM_ID_OPAL_S3_SCRATCH, opal_s3_scratch_size);
+	if (!scratch) {
+		printk(BIOS_ERR, "SMM: Failed to allocate OPAL S3 scratch\n");
+		mod_params->opal_s3_scratch_base = 0;
+		mod_params->opal_s3_scratch_size = 0;
+	} else {
+		mod_params->opal_s3_scratch_base = (uintptr_t)scratch;
+		mod_params->opal_s3_scratch_size = opal_s3_scratch_size;
+	}
+#endif
+
+#if CONFIG(SMM_OPAL_S3_STATE_SMRAM)
+	uintptr_t state_base = 0;
+	size_t state_size = 0;
+	if (smm_subregion(SMM_SUBREGION_OPAL_S3_STATE, &state_base, &state_size)) {
+		printk(BIOS_ERR, "SMM: Failed to locate OPAL S3 state SMRAM region\n");
+		mod_params->opal_s3_state_base = 0;
+		mod_params->opal_s3_state_size = 0;
+	} else {
+		mod_params->opal_s3_state_base = state_base;
+		mod_params->opal_s3_state_size = state_size;
+
+		/* Clear any stale state on cold boot/reboot, but preserve it on S3 resume. */
+		if (!acpi_is_wakeup_s3())
+			memset((void *)state_base, 0, state_size);
+	}
+#endif
 }
 
 static void print_region(const char *name, const struct region region)

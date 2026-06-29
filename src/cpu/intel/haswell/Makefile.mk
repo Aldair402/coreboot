@@ -6,6 +6,7 @@ bootblock-y += ../car/bootblock.c
 bootblock-y += ../../x86/early_reset.S
 
 romstage-y += pcode_mailbox.c
+romstage-y += report_cpu_info.c
 romstage-y += romstage.c
 romstage-y += ../car/romstage.c
 
@@ -15,8 +16,6 @@ ramstage-y += acpi.c
 ramstage-y += haswell_init.c
 ramstage-y += pcode_mailbox.c
 ramstage-$(CONFIG_HAVE_SMI_HANDLER) += smmrelocate.c
-
-smm-y += finalize.c
 
 subdirs-y += ../microcode
 subdirs-y += ../turbo

@@ -117,7 +117,8 @@ chip northbridge/intel/ironlake
 
 					register "beepmask0" = "0xfe"
 					register "beepmask1" = "0x96"
-					register "has_power_management_beeps" = "1"
+					register "has_thinklight" = "true"
+					register "has_power_management_beeps" = "true"
 
 					register "event2_enable" = "0xff"
 					register "event3_enable" = "0xff"
@@ -134,7 +135,7 @@ chip northbridge/intel/ironlake
 					register "evente_enable" = "0x2d"
 				end
 				chip drivers/lenovo/hybrid_graphics
-					device pnp ff.f on end # dummy
+					device generic 0 alias hg_mux on end # dummy
 
 					register "detect_gpio" = "21"
 

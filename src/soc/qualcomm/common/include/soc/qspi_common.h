@@ -97,6 +97,7 @@ static struct qcom_qspi_regs * const qcom_qspi = (void *)QSPI_BASE;
 
 #define QSPI_MAX_PACKET_COUNT 0xFFC0
 
+void qspi_set_bus_clock(uint32_t hz);
 void quadspi_init(uint32_t hz);
 int qspi_claim_bus(const struct spi_slave *slave);
 int qspi_setup_bus(const struct spi_slave *slave);
@@ -105,4 +106,7 @@ int qspi_xfer(const struct spi_slave *slave, const void *dout,
 		size_t out_bytes, void *din, size_t in_bytes);
 int qspi_xfer_dual(const struct spi_slave *slave, const void *dout,
 		     size_t out_bytes, void *din, size_t in_bytes);
+
+/* SoC override */
+void qspi_configure_gpios(void);
 #endif /* __SOC_QUALCOMM_QSPI_H__ */

@@ -22,6 +22,7 @@
 #define DEFAULT_GPIOBASE	0x0480
 #define DEFAULT_PMBASE		0x0500
 
+#include <southbridge/intel/common/lpc_def.h> /* IWYU pragma: export */
 #include <southbridge/intel/common/rcba.h> /* IWYU pragma: export */
 
 #if CONFIG(SOUTHBRIDGE_INTEL_BD82X6X)
@@ -39,6 +40,9 @@ bool pch_is_mobile(void);
 void pch_iobp_update(u32 address, u32 andvalue, u32 orvalue);
 
 void enable_usb_bar(void);
+/* Optional mainboard hook to do disable additional USB ports
+   based on SKU or user configuration. Set bit to 0 to disable port. */
+uint16_t mb_usb20_port_override(void);
 
 void early_thermal_init(void);
 void southbridge_configure_default_intmap(void);
@@ -113,8 +117,6 @@ void early_usb_init(void);
 #define PMBASE			0x40
 #define ACPI_CNTL		0x44
 #define   ACPI_EN		(1 << 7)
-#define BIOS_CNTL		0xDC
-#define GPIO_BASE		0x48 /* LPC GPIO Base Address Register */
 #define GPIO_CNTL		0x4C /* LPC GPIO Control Register */
 
 #define GPIO_ROUT		0xb8
@@ -123,35 +125,9 @@ void early_usb_init(void);
 #define   GPI_IS_SCI		0x02
 #define   GPI_IS_NMI		0x03
 
-#define PIRQA_ROUT		0x60
-#define PIRQB_ROUT		0x61
-#define PIRQC_ROUT		0x62
-#define PIRQD_ROUT		0x63
-#define PIRQE_ROUT		0x68
-#define PIRQF_ROUT		0x69
-#define PIRQG_ROUT		0x6A
-#define PIRQH_ROUT		0x6B
-
 #define LPC_IBDF		0x6C /* I/O APIC bus/dev/fn */
 #define LPC_HnBDF(n)		(0x70 + n * 2) /* HPET n bus/dev/fn */
 
-#define LPC_IO_DEC		0x80 /* IO Decode Ranges Register */
-#define LPC_EN			0x82 /* LPC IF Enables Register */
-#define  CNF2_LPC_EN		(1 << 13) /* 0x4e/0x4f */
-#define  CNF1_LPC_EN		(1 << 12) /* 0x2e/0x2f */
-#define  MC_LPC_EN		(1 << 11) /* 0x62/0x66 */
-#define  KBC_LPC_EN		(1 << 10) /* 0x60/0x64 */
-#define  GAMEH_LPC_EN		(1 << 9)  /* 0x208/0x20f */
-#define  GAMEL_LPC_EN		(1 << 8)  /* 0x200/0x207 */
-#define  FDD_LPC_EN		(1 << 3)  /* LPC_IO_DEC[12] */
-#define  LPT_LPC_EN		(1 << 2)  /* LPC_IO_DEC[9:8] */
-#define  COMB_LPC_EN		(1 << 1)  /* LPC_IO_DEC[6:4] */
-#define  COMA_LPC_EN		(1 << 0)  /* LPC_IO_DEC[3:2] */
-#define LPC_GEN1_DEC		0x84 /* LPC IF Generic Decode Range 1 */
-#define LPC_GEN2_DEC		0x88 /* LPC IF Generic Decode Range 2 */
-#define LPC_GEN3_DEC		0x8c /* LPC IF Generic Decode Range 3 */
-#define LPC_GEN4_DEC		0x90 /* LPC IF Generic Decode Range 4 */
-#define LGMR			0x98 /* LPC Generic Memory Range */
 #define BIOS_DEC_EN1		0xd8 /* BIOS Decode Enable */
 
 /* PCI Configuration Space (D31:F2): SATA */
@@ -180,9 +156,6 @@ void early_usb_init(void);
 #define HST_EN			(1 << 0)
 
 /* Southbridge IO BARs */
-
-#define GPIOBASE		0x48
-
 #define PMBASE		0x40
 
 #define CIR0		0x0050	/* 32bit */
@@ -307,6 +280,7 @@ void early_usb_init(void);
 #define D22IR		0x315c	/* 16bit */
 #define D20IR		0x3160	/* 16bit */
 #define OIC		0x31fe	/* 16bit */
+#define SOFT_RESET_LOCK 0x38f0
 #define SOFT_RESET_CTRL 0x38f4
 #define SOFT_RESET_DATA 0x38f8
 

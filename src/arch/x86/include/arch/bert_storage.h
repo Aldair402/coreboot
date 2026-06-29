@@ -94,7 +94,7 @@ static inline acpi_hest_generic_data_v300_t *acpi_hest_generic_data3(
 /* Add a context to an existing IA32/X64-type error entry */
 cper_ia32x64_context_t *new_cper_ia32x64_ctx(
 		acpi_generic_error_status_t *status,
-		cper_ia32x64_proc_error_section_t *x86err, int type, int array_size);
+		cper_ia32x64_proc_error_section_t *x86err, int type, int array_size_bytes);
 
 /* Helper to add an MSR context to an existing IA32/X64-type error entry */
 cper_ia32x64_context_t *cper_new_ia32x64_context_msr(
@@ -131,6 +131,8 @@ acpi_hest_generic_data_v300_t *bert_append_ia32x64(
 
 void *new_cper_fw_error_crashlog(acpi_generic_error_status_t *status, size_t cl_size);
 acpi_hest_generic_data_v300_t *bert_append_fw_err(acpi_generic_error_status_t *status);
+
+acpi_hest_generic_data_v300_t *bert_append_plat_mem(acpi_generic_error_status_t *status);
 
 /* Add a new event to the BERT region.  An event consists of an ACPI Error
  * Status Block, a Generic Error Data Entry, and an associated CPER Error

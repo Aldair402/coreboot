@@ -41,7 +41,6 @@ fw_config
 end
 
 chip soc/intel/jasperlake
-	device cpu_cluster 0 on end
 
 	# GPE configuration
 	# Note that GPE events called out in ASL code rely on this
@@ -204,9 +203,6 @@ chip soc/intel/jasperlake
 	# For an offset = 12.580, use 12580
 	register "ImonOffset" = "0"
 
-	# Skip the CPU replacement check
-	register "SkipCpuReplacementCheck" = "1"
-
 	# Sagv Configuration
 	register "SaGv" = "SaGv_Enabled"
 
@@ -228,9 +224,7 @@ chip soc/intel/jasperlake
 	register "xhci_lfps_sampling_offtime_ms" = "9"
 
 	device domain 0 on
-		device ref igpu on
-			register "gfx" = "GMA_DEFAULT_PANEL(0)"
-		end
+		device ref igpu on end
 		device ref dptf on
 			# Default DPTF Policy for all Dedede boards if not overridden
 			chip drivers/intel/dptf
@@ -286,8 +280,6 @@ chip soc/intel/jasperlake
 		device ref gna on end
 		device ref south_xhci on
 			chip drivers/usb/acpi
-				register "desc" = ""Root Hub""
-				register "type" = "UPC_TYPE_HUB"
 				device ref xhci_root_hub on
 					chip drivers/usb/acpi
 						register "desc" = ""Left Type-C Port""

@@ -7,6 +7,7 @@
 #include <device/mmio.h>
 #include <soc/symbols_common.h>
 #include <soc/addressmap.h>
+#include <soc/platform_info.h>
 
 __weak int qclib_mainboard_override(struct qclib_cb_if_table *table) { return 0; }
 
@@ -27,9 +28,62 @@ bool qclib_check_dload_mode(void)
 	return false;
 }
 
+struct qclib_file_map {
+	const char *dcb;
+	const char *dtb;
+	const char *cpr;
+};
+
+static const struct qclib_file_map hamoa_files = {
+	.dcb = CONFIG_CBFS_PREFIX "/dcb_hamoa",
+	.dtb = CONFIG_CBFS_PREFIX "/dtb_hamoa",
+	.cpr = CONFIG_CBFS_PREFIX "/cpr_hamoa",
+};
+
+static const struct qclib_file_map x1p_files = {
+	.dcb = CONFIG_CBFS_PREFIX "/dcb_x1p42100",
+	.dtb = CONFIG_CBFS_PREFIX "/dtb_x1p42100",
+	.cpr = CONFIG_CBFS_PREFIX "/cpr_x1p42100",
+};
+
+static const struct qclib_file_map *get_soc_file_map(void)
+{
+	enum qclib_soc_id soc = platform_get_soc_id();
+
+	if (soc == SOC_ID_HAMOA)
+		return &hamoa_files;
+
+	/* Fall back to x1p42100 configuration by default */
+	return &x1p_files;
+}
+
+const char *qclib_override_soc_file(enum qclib_cbfs_file file)
+{
+	const struct qclib_file_map *map = get_soc_file_map();
+
+	switch (file) {
+	case QCLIB_CBFS_DCB:
+		return map->dcb;
+	case QCLIB_CBFS_DTB:
+		return map->dtb;
+	case QCLIB_CBFS_CPR:
+		return map->cpr;
+	default:
+		return NULL;
+	}
+}
+
 int qclib_soc_override(struct qclib_cb_if_table *table)
 {
 	ssize_t data_size;
+
+	/* Attempt to load DCB Blob */
+	data_size = cbfs_load(qclib_file(QCLIB_CBFS_DCB), _dcb, REGION_SIZE(dcb));
+	if (!data_size) {
+		printk(BIOS_ERR, "[%s] /dcb failed\n", __func__);
+		return -1;
+	}
+	qclib_add_if_table_entry(QCLIB_TE_DCB_SETTINGS, _dcb, data_size, 0);
 
 	/* Attempt to load DTB Blob */
 	data_size = cbfs_load(qclib_file(QCLIB_CBFS_DTB), _dtb, REGION_SIZE(dtb));

@@ -58,6 +58,7 @@ config SOC_INTEL_METEORLAKE
 	select SOC_INTEL_COMMON_BLOCK_ACPI_PEP_LPM_REQ
 	select SOC_INTEL_COMMON_BLOCK_ASPM
 	select SOC_INTEL_COMMON_BLOCK_CAR
+	select SOC_INTEL_COMMON_BLOCK_CAR_ENHANCED_NEM
 	select SOC_INTEL_COMMON_BLOCK_CHIP_CONFIG
 	select SOC_INTEL_COMMON_BLOCK_CNVI
 	select SOC_INTEL_COMMON_BLOCK_CPU
@@ -86,6 +87,19 @@ config SOC_INTEL_METEORLAKE
 	select SOC_INTEL_COMMON_BLOCK_THERMAL_BEHIND_PMC
 	select SOC_INTEL_COMMON_BLOCK_XHCI
 	select SOC_INTEL_COMMON_BLOCK_XHCI_ELOG
+	select SOC_INTEL_COMMON_FEATURE
+	select SOC_INTEL_COMMON_FEATURE_ESPI
+	select SOC_INTEL_COMMON_FEATURE_FINALIZE
+	select SOC_INTEL_COMMON_FEATURE_GLOBAL_RESET_CSE_PMC
+	select SOC_INTEL_COMMON_FEATURE_GSPI_DEVFN
+	select SOC_INTEL_COMMON_FEATURE_I2C_DEVFN
+	select SOC_INTEL_COMMON_FEATURE_LOCKDOWN
+	select SOC_INTEL_COMMON_FEATURE_PMUTIL
+	select SOC_INTEL_COMMON_FEATURE_SMIHANDLER
+	select SOC_INTEL_COMMON_FEATURE_SOUNDWIRE
+	select SOC_INTEL_COMMON_FEATURE_SPI_DEVFN
+	select SOC_INTEL_COMMON_FEATURE_SPI_DEVFN_PSF
+	select SOC_INTEL_COMMON_FEATURE_UART_DEVICES
 	select SOC_INTEL_COMMON_BASECODE
 	select SOC_INTEL_COMMON_BASECODE_RAMTOP
 	select SOC_INTEL_COMMON_FSP_RESET
@@ -104,7 +118,6 @@ config SOC_INTEL_METEORLAKE
 	select TSC_MONOTONIC_TIMER
 	select UDELAY_TSC
 	select UDK_202302_BINDING
-	select X86_INIT_NEED_1_SIPI
 	select INTEL_KEYLOCKER
 	help
 	  Intel Meteorlake support. Mainboards should specify the SoC
@@ -146,15 +159,6 @@ config SOC_INTEL_METEORLAKE_TCSS_USB4_SUPPORT
 	select SOC_INTEL_COMMON_BLOCK_USB4
 	select SOC_INTEL_COMMON_BLOCK_USB4_PCIE
 	select SOC_INTEL_COMMON_BLOCK_USB4_XHCI
-
-config METEORLAKE_CAR_ENHANCED_NEM
-	bool
-	default y if !INTEL_CAR_NEM
-	select INTEL_CAR_NEM_ENHANCED
-	select CAR_HAS_SF_MASKS
-	select COS_MAPPED_TO_MSB
-	select CAR_HAS_L3_PROTECTED_WAYS
-	select INTEL_CAR_ENEM_USE_EFFECTIVE_WAY_SIZE
 
 config MAX_CPUS
 	int
@@ -354,14 +358,14 @@ config FSP_TYPE_IOT
 
 config FSP_HEADER_PATH
 	string "Location of FSP headers"
-	default "3rdparty/fsp/MeteorLakeFspBinPkg/IoT/MeteorLake/Include" if FSP_USE_REPO && FSP_TYPE_IOT
+	default "3rdparty/fsp/ArrowLakeFspBinPkg/IoT/ArrowLakeUH/Include" if FSP_USE_REPO && FSP_TYPE_IOT
 	default "src/vendorcode/intel/fsp/fsp2_0/meteorlake/x86_64/" if HAVE_X86_64_SUPPORT
 	default "src/vendorcode/intel/fsp/fsp2_0/meteorlake/x86_32/"
 
 config FSP_FD_PATH
 	string
 	depends on FSP_USE_REPO
-	default "3rdparty/fsp/MeteorLakeFspBinPkg/IoT/MeteorLake/Fsp.fd" if FSP_TYPE_IOT
+	default "3rdparty/fsp/ArrowLakeFspBinPkg/IoT/ArrowLakeUH/Fsp.fd" if FSP_TYPE_IOT
 	default "3rdparty/fsp/MeteorLakeFspBinPkg/Fsp.fd"
 
 # Override platform debug consent value:
@@ -473,5 +477,13 @@ config SKIP_SEND_CONNECT_TOPOLOGY_CMD
 
 config TME_KEY_REGENERATION_ON_WARM_BOOT
 	default y if INTEL_TME
+
+config SOC_INTEL_SPI_DEV_MAX
+	int
+	default 3
+
+config SOC_INTEL_SPI_PSF_DESTINATION_ID
+	hex
+	default 0x5140
 
 endif

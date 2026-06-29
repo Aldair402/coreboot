@@ -3,14 +3,14 @@
 #include <chip.h>
 #include <cpu/intel/turbo.h>
 #include <device/device.h>
-#include <device/pci_def.h>
+#include <devtree_update.h>
 #include <option.h>
 #include <static.h>
 #include <types.h>
 #include <variants.h>
 #include <common/powercap.h>
 
-void devtree_update(void)
+void mb_devtree_update(void)
 {
 	config_t *cfg = config_of_soc();
 	update_power_limits(cfg);

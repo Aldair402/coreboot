@@ -169,14 +169,25 @@ void lpc_open_pmio_window(uint16_t base, uint16_t size)
 		alignment = 1UL << (log2_ceil(window_size));
 		window_size = ALIGN_UP(window_size, alignment);
 
-		/* Address[15:2] in LGIR[15:12] and Mask[7:2] in LGIR[23:18]. */
-		lgir = (bridge_base & LPC_LGIR_ADDR_MASK) | LPC_LGIR_EN;
-		lgir |= ((window_size - 1) << 16) & LPC_LGIR_AMASK_MASK;
+		const struct region win = region_create(bridge_base, window_size);
 
-		/* Skip programming if same range already programmed. */
+		/* Skip programming if covered by existing window. */
 		for (i = 0; i < LPC_NUM_GENERIC_IO_RANGES; i++) {
-			if (lgir == pci_read_config32(PCH_DEV_LPC,
-						LPC_GENERIC_IO_RANGE(i)))
+			const u32 reg32 = pci_read_config32(PCH_DEV_LPC, LPC_GENERIC_IO_RANGE(i));
+			if (!(reg32 & LPC_LGIR_EN))
+				continue;
+
+			/* The AMASK field stores bits [7:2] of the address mask.
+			 * Bits [1:0] are always set (4-byte granularity).
+			 * To decode: mask = (amask_raw & 0xfc) | 0x3
+			 *            size = mask + 1
+			 */
+			const u32 exist_base = reg32 & LPC_LGIR_ADDR_MASK;
+			const u32 amask_raw = (reg32 & LPC_LGIR_AMASK_MASK) >> 16;
+			const u32 exist_size = ((amask_raw & 0xfc) | 0x3) + 1;
+			const struct region exist = region_create(exist_base, exist_size);
+
+			if (region_is_subregion(&exist, &win))
 				return;
 		}
 
@@ -189,6 +200,10 @@ void lpc_open_pmio_window(uint16_t base, uint16_t size)
 			return;
 		}
 		lgir_reg_offset = LPC_GENERIC_IO_RANGE(lgir_reg_num);
+
+		/* Address[15:2] in LGIR[15:12] and Mask[7:2] in LGIR[23:18]. */
+		lgir = (bridge_base & LPC_LGIR_ADDR_MASK) | LPC_LGIR_EN;
+		lgir |= ((window_size - 1) << 16) & LPC_LGIR_AMASK_MASK;
 
 		pci_write_config32(PCH_DEV_LPC, lgir_reg_offset, lgir);
 		if (CONFIG(SOC_INTEL_COMMON_BLOCK_LPC_MIRROR_TO_GPMR))
@@ -226,8 +241,11 @@ void lpc_open_mmio_window(uintptr_t base, size_t size)
 	lgmr = (base & LPC_LGMR_ADDR_MASK) | LPC_LGMR_EN;
 
 	pci_write_config32(PCH_DEV_LPC, LPC_GENERIC_MEM_RANGE, lgmr);
-	if (CONFIG(SOC_INTEL_COMMON_BLOCK_LPC_MIRROR_TO_GPMR))
+	if (CONFIG(SOC_INTEL_COMMON_BLOCK_LPC_MIRROR_TO_GPMR)) {
+		if (CONFIG(SOC_INTEL_COMMON_BLOCK_LPC_GPMR_IOC_1MB))
+			lgmr = LPC_LGMR_ADDR_1MB(base & LPC_LGMR_ADDR_MASK) | LPC_LGMR_EN;
 		gpmr_write32(GPMR_LPCGMR, lgmr);
+	}
 }
 
 /*

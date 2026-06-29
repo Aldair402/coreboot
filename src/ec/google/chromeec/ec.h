@@ -110,6 +110,8 @@ int google_chromeec_reboot(enum ec_reboot_cmd type, uint8_t flags);
 
 void google_chromeec_ap_poweroff(void);
 
+int google_chromeec_offmode_heartbeat(void);
+
 /**
  * Get data from Cros Board Info
  *
@@ -155,6 +157,14 @@ bool google_chromeec_is_usb_pd_attached(void);
  *			false: if the charger is not present
  */
 bool google_chromeec_is_charger_present(void);
+
+/**
+ * Check if the Chrome EC has an active RTC event.
+ *
+ * @return		true: if the RTC event is present
+ *			false: if the RTC event is not present
+ */
+bool google_chromeec_is_rtc_event(void);
 
 /**
  * Check if barrel charger is present.
@@ -479,6 +489,14 @@ bool google_chromeec_is_below_critical_threshold(void);
 bool google_chromeec_is_battery_present(void);
 
 /**
+ * Check if battery data is valid.
+ *
+ * @return		true: if the battery data is valid
+ *			false: if the battery data is invalid
+ */
+bool google_chromeec_is_battery_data_valid(void);
+
+/**
  * Determine if the UCSI stack is currently active.
  *
  * @return true if EC implements the UCSI stack
@@ -547,6 +565,22 @@ void chipset_ioport_range(uint16_t *base, size_t *size);
 int google_chromeec_read_batt_state_of_charge(uint32_t *state);
 
 /*
+ * Reads remaining battery capacity.
+ * capacity: Pointer to store the remaining capacity in mAh.
+ *
+ * Return: 0 on success, -1 on failure.
+ */
+int google_chromeec_read_batt_remaining_capacity(uint32_t *capacity);
+
+/*
+ * Query the EC for the Battery MISC Information.
+ *
+ * Return: 0 on success, or -1 if the command fails or is
+ *         unsupported by the current EC firmware version.
+ */
+int google_chromeec_get_battery_misc_info(struct ec_response_battery_get_misc_info *resp);
+
+/*
  * Set the RGB color of a specific LED on the Lightbar.
  *
  * This function communicates with the Embedded Controller (EC)
@@ -561,6 +595,37 @@ int google_chromeec_read_batt_state_of_charge(uint32_t *state);
  */
 int google_chromeec_set_lightbar_rgb(unsigned int led, int red, int green,
 			 int blue);
+
+/*
+ * Sends a command to turn off the Chrome EC lightbar.
+ *
+ * This function packages a LIGHTBAR_CMD_OFF sub-command into a standard
+ * EC_CMD_LIGHTBAR_CMD packet.
+ *
+ * @return 0 on success, non-zero error code from the EC transport on failure.
+ */
+int google_chromeec_lightbar_off(void);
+
+/*
+ * Sends a command to enable the Chrome EC lightbar.
+ *
+ * This function wraps the LIGHTBAR_CMD_ON sub-command into a standard
+ * EC_CMD_LIGHTBAR_CMD host command.
+ *
+ * @return 0 on success, or a non-zero EC transport error code on failure.
+ */
+int google_chromeec_lightbar_on(void);
+
+/*
+ * Sends a command to set the Chrome EC lightbar sequence.
+ *
+ * This function wraps the LIGHTBAR_CMD_SEQ sub-command into a standard
+ * EC_CMD_LIGHTBAR_CMD host command to trigger a predefined LED pattern.
+ *
+ * @param seq_num The sequence number to trigger.
+ * @return 0 on success, or a non-zero EC transport error code on failure.
+ */
+int google_chromeec_lightbar_sequence(uint8_t seq_num);
 
 /*
  * Check if the battery is critically low and AC is not present.

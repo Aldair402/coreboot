@@ -10,7 +10,7 @@ chip soc/intel/meteorlake
 	}"
 
 	# Enable Enhanced Intel SpeedStep
-	register "eist_enable" = "1"
+	register "eist_enable" = "true"
 
 	# Enable S0ix / Modern Standby
 	register "s0ix_enable" = "1"
@@ -24,7 +24,6 @@ chip soc/intel/meteorlake
 	# Thermal
 	register "tcc_offset" = "10" # TCC of 100C
 
-	device cpu_cluster 0 on end
 	device domain 0 on
 		device ref system_agent on end
 		device ref igpu on
@@ -256,7 +255,7 @@ chip soc/intel/meteorlake
 			subsystemid 0x1558 0xa763
 			register "pch_hda_audio_link_hda_enable" = "1"
 			register "pch_hda_sdi_enable[0]" = "1"
-			register "pch_hda_dsp_enable" = "1"
+			register "pch_hda_dsp_enable" = "true"
 			register "pch_hda_idisp_codec_enable" = "1"
 			register "pch_hda_idisp_link_frequency" = "HDA_LINKFREQ_96MHZ"
 			register "pch_hda_idisp_link_tmode" = "HDA_TMODE_8T"

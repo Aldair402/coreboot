@@ -15,15 +15,12 @@ void setup_chromeos_gpios(void)
 
 	if (CONFIG(MAINBOARD_HAS_FINGERPRINT)) {
 		gpio_output(GPIO_FP_RST_L, 0);
+		gpio_output(GPIO_EN_FP_RAILS, 0);
 		if (CONFIG(MAINBOARD_HAS_FINGERPRINT_VIA_SPI)) {
 			gpio_output(GPIO_FPMCU_BOOT0, 0);
-			gpio_output(GPIO_EN_FP_RAILS, 0);
 			gpio_input_irq(GPIO_FPMCU_INT, IRQ_TYPE_LEVEL, GPIO_PULL_UP);
 		}
 	}
-
-	gpio_output(GPIO_SNDW_AMP_0_ENABLE, 0);
-	gpio_output(GPIO_SNDW_AMP_1_ENABLE, 0);
 }
 
 void fill_lb_gpios(struct lb_gpios *gpios)
@@ -33,6 +30,12 @@ void fill_lb_gpios(struct lb_gpios *gpios)
 #if CONFIG(EC_GOOGLE_CHROMEEC)
 		{GPIO_AP_EC_INT.addr, ACTIVE_LOW, gpio_get(GPIO_AP_EC_INT),
 			"EC interrupt"},
+#endif
+		{GPIO_PANEL_POWER_ON.addr, ACTIVE_HIGH, gpio_get(GPIO_PANEL_POWER_ON),
+			"Panel VDD en"},
+#if CONFIG_MAINBOARD_GPIO_PIN_FOR_TOUCHSCREEN_POWER
+		{GPIO_TS_POWER_EN.addr, ACTIVE_HIGH, gpio_get(GPIO_TS_POWER_EN),
+			"Panel VTSP en"},
 #endif
 #if CONFIG(TPM_GOOGLE_TI50)
 		{GPIO_GSC_AP_INT.addr, ACTIVE_HIGH, gpio_get(GPIO_GSC_AP_INT),

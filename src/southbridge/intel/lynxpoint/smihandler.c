@@ -5,13 +5,17 @@
 #include <device/pci_ops.h>
 #include <console/console.h>
 #include <cpu/x86/cache.h>
+#include <cpu/x86/msr.h>
 #include <device/pci_def.h>
 #include <cpu/x86/smm.h>
 #include <cpu/intel/em64t101_save_state.h>
+#include <cpu/intel/msr.h>
 #include <elog.h>
 #include <halt.h>
 #include <option.h>
 #include <southbridge/intel/common/finalize.h>
+#include <southbridge/intel/common/insmm_sts.h>
+#include <southbridge/intel/common/lpc_def.h>
 #include <northbridge/intel/haswell/haswell.h>
 #include <cpu/intel/haswell/haswell.h>
 #include <soc/nvs.h>
@@ -238,9 +242,20 @@ static void southbridge_smi_store(void)
 	/* Parameter buffer in EBX */
 	reg_ebx = io_smi->rbx;
 
+	const pci_devfn_t lpc_dev = PCI_DEV(0, 0x1f, 0);
+	const bool wp_enabled = !(pci_read_config16(lpc_dev, BIOS_CNTL) & BIOS_CNTL_BIOSWE);
+	if (wp_enabled) {
+		set_insmm_sts(true);
+		pci_or_config16(lpc_dev, BIOS_CNTL, BIOS_CNTL_BIOSWE);
+	}
 	/* drivers/smmstore/smi.c */
 	ret = smmstore_exec(sub_command, (void *)reg_ebx);
 	io_smi->rax = ret;
+
+	if (wp_enabled) {
+		pci_and_config16(lpc_dev, BIOS_CNTL, ~BIOS_CNTL_BIOSWE);
+		set_insmm_sts(false);
+	}
 }
 
 static void southbridge_smi_apmc(void)
@@ -257,7 +272,6 @@ static void southbridge_smi_apmc(void)
 		}
 
 		intel_pch_finalize_smm();
-		intel_cpu_haswell_finalize_smm();
 
 		chipset_finalized = 1;
 		break;
@@ -334,7 +348,7 @@ static void southbridge_smi_tco(void)
 	if (tco_sts & (1 << 8)) {
 		u8 bios_cntl = pci_read_config8(PCH_LPC_DEV, BIOS_CNTL);
 
-		if (bios_cntl & 1) {
+		if (bios_cntl & BIOS_CNTL_BIOSWE) {
 			/*
 			 * BWE is RW, so the SMI was caused by a
 			 * write to BWE, not by a write to the BIOS
@@ -346,7 +360,7 @@ static void southbridge_smi_tco(void)
 			 * box.
 			 */
 			printk(BIOS_DEBUG, "Switching back to RO\n");
-			pci_write_config8(PCH_LPC_DEV, BIOS_CNTL, (bios_cntl & ~1));
+			pci_write_config8(PCH_LPC_DEV, BIOS_CNTL, bios_cntl & ~BIOS_CNTL_BIOSWE);
 		} /* No else for now? */
 	} else if (tco_sts & (1 << 3)) { /* TIMEOUT */
 		/* Handle TCO timeout */

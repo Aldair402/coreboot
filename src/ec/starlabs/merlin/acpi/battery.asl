@@ -42,21 +42,29 @@ Device (BAT0)
 		CONFIG_EC_STARLABS_BATTERY_OEM		// 12: OEM Information
 	})
 
+	Method (BFCX, 0, NotSerialized)
+	{
+		Local0 = ECRD(RefOf(B1FC))
+		If (Local0) {
+			If (Local0 != 0xffff) {
+				Return (Local0)
+			}
+		}
+		Return (ECRD(RefOf(B1DC)))
+	}
+
 	Method (_BIF, 0, NotSerialized)
 	{
 		Local0 = ECRD(RefOf(B1DC))
 		If (Local0) {
+			Local1 = BFCX()
 			SBIF  [1] = Local0
-			If (B1FC != 0xffff) {
-				SBIF  [2] = ECRD(RefOf(B1FC))
-			} Else {
-				SBIF  [2] = Local0
-			}
+			SBIF  [2] = Local1
 			SBIF  [4] = ECRD(RefOf(B1DV))
-			SBIF  [5] = Local0 / 5		// 20%
-			SBIF  [6] = Local0 / 20		// 5%
-			SBIF  [7] = Local0 / 500	// 0.2%
-			SBIF  [8] = Local0 / 500	// 0.2%
+			SBIF  [5] = (Local1 + 2) / 5	// 20%
+			SBIF  [6] = (Local1 + 5) / 10	// 10%
+			SBIF  [7] = Local1 / 500	// 0.2%
+			SBIF  [8] = Local1 / 500	// 0.2%
 		}
 		Return (SBIF)
 	}
@@ -94,20 +102,17 @@ Device (BAT0)
 	{
 		Local0 = ECRD(RefOf(B1DC))
 		If (Local0) {
+			Local1 = BFCX()
 			XBIF  [2] = Local0
-			If (B1FC != 0xffff) {
-				XBIF  [3] = ECRD(RefOf(B1FC))
-			} Else {
-				XBIF  [3] = Local0
-			}
+			XBIF  [3] = Local1
 			XBIF  [5] = ECRD(RefOf(B1DV))
-			XBIF  [6] = Local0 / 5	// 20%
-			XBIF  [7] = Local0 / 20	// 5%
+			XBIF  [6] = (Local1 + 2) / 5	// 20%
+			XBIF  [7] = (Local1 + 5) / 10	// 10%
 			If (B1CC != 0xffff) {
 				XBIF  [8] = ECRD(RefOf(B1CC))
 			}
-			XBIF [14] = Local0 / 500	// 0.2%
-			XBIF [15] = Local0 / 500	// 0.2%
+			XBIF [14] = Local1 / 500	// 0.2%
+			XBIF [15] = Local1 / 500	// 0.2%
 		}
 		Return (XBIF)
 	}
@@ -124,11 +129,22 @@ Device (BAT0)
 		PKG1[0] = (ECRD(RefOf(B1ST)) & 0x07)
 		PKG1[1] = ECRD(RefOf(B1PR))
 
-		Local0 = ECRD(RefOf(B1RC))
-		If (Local0 != 0xffff) {
-			PKG1[2] = Local0
-		} Else {
-			PKG1[2] = (ECRD(RefOf(B1RP)) * ECRD(RefOf(B1DC))) / 100
+		PKG1[2] = 0xffffffff
+		Local2 = 0
+
+		Local0 = ECRD(RefOf(B1RP))
+		If (Local0 <= 100) {
+			Local1 = BFCX()
+			If (Local1) {
+				PKG1[2] = ((Local0 * Local1) + 50) / 100
+				Local2 = 1
+			}
+		}
+		If (Local2 == 0) {
+			Local0 = ECRD(RefOf(B1RC))
+			If (Local0 != 0xffff) {
+				PKG1[2] = Local0
+			}
 		}
 		PKG1[3] = ECRD(RefOf(B1PV))
 		Return (PKG1)

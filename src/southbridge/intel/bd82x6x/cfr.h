@@ -11,6 +11,14 @@
 #include <southbridge/intel/common/pmutil.h>
 #include "me.h"
 
+#define DEFINE_RP_ENABLE_OPTION(_rp, _name)			\
+static const struct sm_object pcie_rp##_rp = SM_DECLARE_BOOL({	\
+	.opt_name	= "pch_pcie_enable_rp"#_rp,		\
+	.ui_name	= _name,				\
+	.ui_helptext	= "Enable or disable "#_name,		\
+	.default_value	= true,					\
+})
+
 /* Power state after power loss */
 static const struct sm_object power_on_after_fail = SM_DECLARE_ENUM({
 	.opt_name	= "power_on_after_fail",

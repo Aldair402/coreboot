@@ -1,15 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include <device/pci_def.h>
 #include <device/pci_mmio_cfg.h>
 #include <device/pci_ops.h>
 #include <northbridge/intel/haswell/haswell.h>
 #include <northbridge/intel/haswell/vcu_mailbox.h>
 #include <types.h>
-
-#define PEG_DEV(func)		PCI_DEV(0, 1, func)
-
-#define MAX_PEG_FUNC		3
 
 static void peg_dmi_unset_and_set_mask_pcicfg(
 	volatile union pci_bank *const bank,

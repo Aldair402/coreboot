@@ -1,14 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include <stdint.h>
 #include <console/console.h>
+#include <cpu/intel/haswell/haswell.h>
 #include <device/mmio.h>
 #include <device/pci_def.h>
 #include <device/pci_ops.h>
+#include <types.h>
 
 #include "haswell.h"
-
-static bool peg_hidden[3];
 
 static void haswell_setup_bars(void)
 {
@@ -64,78 +63,6 @@ static void haswell_setup_igd(void)
 	pci_update_config8(PCI_DEV(0, 2, 0), MSAC, ~0x06, 0x02);
 }
 
-static void start_peg2_link_training(const pci_devfn_t dev)
-{
-	u32 mask;
-
-	switch (dev) {
-	case PCI_DEV(0, 1, 2):
-		mask = DEVEN_D1F2EN;
-		break;
-	case PCI_DEV(0, 1, 1):
-		mask = DEVEN_D1F1EN;
-		break;
-	case PCI_DEV(0, 1, 0):
-		mask = DEVEN_D1F0EN;
-		break;
-	default:
-		printk(BIOS_ERR, "Link training tried on a non-PEG device!\n");
-		return;
-	}
-
-	pci_update_config32(dev, 0xc24, ~(1 << 16), 1 << 5);
-	printk(BIOS_DEBUG, "Started PEG1%d link training.\n", PCI_FUNC(PCI_DEV2DEVFN(dev)));
-
-	/*
-	 * The MRC will perform PCI enumeration, and if it detects a VGA
-	 * device in a PEG slot, it will disable the IGD and not reserve
-	 * any memory for it. Since the memory map is locked by the time
-	 * MRC finishes, the IGD can't be enabled afterwards. Wonderful.
-	 *
-	 * If one really wants to enable the Intel iGPU as primary, hide
-	 * all PEG devices during MRC execution. This will trick the MRC
-	 * into thinking there aren't any, and will enable the IGD. Note
-	 * that PEG AFE settings will not be programmed, which may cause
-	 * stability problems at higher PCIe link speeds. The most ideal
-	 * way to fix this problem for good is to implement native init.
-	 */
-	if (CONFIG(HASWELL_HIDE_PEG_FROM_MRC)) {
-		pci_update_config32(HOST_BRIDGE, DEVEN, ~mask, 0);
-		peg_hidden[PCI_FUNC(PCI_DEV2DEVFN(dev))] = true;
-		printk(BIOS_DEBUG, "Temporarily hiding PEG1%d.\n",
-		       PCI_FUNC(PCI_DEV2DEVFN(dev)));
-	}
-}
-
-void haswell_unhide_peg(void)
-{
-	u32 deven = pci_read_config32(HOST_BRIDGE, DEVEN);
-
-	for (u8 fn = 0; fn <= 2; fn++) {
-		if (peg_hidden[fn]) {
-			deven |= DEVEN_D1F0EN >> fn;
-			peg_hidden[fn] = false;
-			printk(BIOS_DEBUG, "Unhiding PEG1%d.\n", fn);
-		}
-	}
-
-	pci_write_config32(HOST_BRIDGE, DEVEN, deven);
-}
-
-static void haswell_setup_peg(void)
-{
-	u32 deven = pci_read_config32(HOST_BRIDGE, DEVEN);
-
-	if (deven & DEVEN_D1F2EN)
-		start_peg2_link_training(PCI_DEV(0, 1, 2));
-
-	if (deven & DEVEN_D1F1EN)
-		start_peg2_link_training(PCI_DEV(0, 1, 1));
-
-	if (deven & DEVEN_D1F0EN)
-		start_peg2_link_training(PCI_DEV(0, 1, 0));
-}
-
 static void haswell_setup_misc(void)
 {
 	u32 reg32;
@@ -145,19 +72,14 @@ static void haswell_setup_misc(void)
 	reg32 |= (1 << 9) | (1 << 10);
 	mchbar_write32(SAPMCTL, reg32);
 
-	/* Enable SA Clock Gating */
-	reg32 = mchbar_read32(SAPMCTL);
-	mchbar_write32(SAPMCTL, reg32 | 1);
-
 	reg32 = mchbar_read32(INTRDIRCTL);
 	reg32 |= (1 << 4) | (1 << 5);
 	mchbar_write32(INTRDIRCTL, reg32);
 }
 
-static void haswell_setup_iommu(void)
+static void northbridge_setup_iommu(void)
 {
 	const u32 capid0_a = pci_read_config32(HOST_BRIDGE, CAPID0_A);
-
 	if (capid0_a & VTD_DISABLE)
 		return;
 
@@ -167,17 +89,37 @@ static void haswell_setup_iommu(void)
 	mchbar_write32(VTVC0BAR + 4, VTVC0_BASE_ADDRESS >> 32);
 	mchbar_write32(VTVC0BAR + 0, VTVC0_BASE_ADDRESS | 1);
 
-	/* Set L3HIT2PEND_DIS, lock GFXVTBAR policy config registers */
-	u32 reg32;
-	reg32 = read32p(GFXVT_BASE_ADDRESS + ARCHDIS);
-	write32p(GFXVT_BASE_ADDRESS + ARCHDIS, reg32 | DMAR_LCKDN | L3HIT2PEND_DIS);
+	if (cpu_is_haswell()) {
+		/*
+		 * Intel Document 492662 (Haswell System Agent BIOS Spec), Rev 1.6.0
+		 * Section 11.3 - DMA Remapping Engine Configuration
+		 */
+		const u32 gfxvt_archdis = 0x02100000 | DMAR_LCKDN;
+		write32p(GFXVT_BASE_ADDRESS + ARCHDIS, gfxvt_archdis);
 
-	/* Clear SPCAPCTRL */
-	reg32 = read32p(VTVC0_BASE_ADDRESS + ARCHDIS) & ~SPCAPCTRL;
+		clrsetbits32p(VTVC0_BASE_ADDRESS + 0xf04, 0xf << 15, 1 << 15);
 
-	/* Set GLBIOTLBINV, GLBCTXTINV; lock VTVC0BAR policy config registers */
-	write32p(VTVC0_BASE_ADDRESS + ARCHDIS,
-			reg32 | DMAR_LCKDN | GLBIOTLBINV | GLBCTXTINV);
+		u32 vtvc0_archdis = 0x000a5003 | DMAR_LCKDN;
+		if (pci_read_config16(PCI_DEV(0, 2, 0), PCI_DEVICE_ID) == 0xffff) {
+			vtvc0_archdis |= SPCAPCTRL;
+		}
+		write32p(VTVC0_BASE_ADDRESS + ARCHDIS, vtvc0_archdis);
+	}
+	if (cpu_is_broadwell()) {
+		/*
+		 * Intel Document 535094 (Broadwell BIOS Spec), Rev 2.2.0
+		 * Section 17.3 - DMA Remapping Engine Configuration
+		 */
+
+		/* TODO: For steppings <= D0 (pre-production), also clear bit 0 */
+		setbits32p(GFXVT_BASE_ADDRESS + ARCHDIS, DMAR_LCKDN | PRSCAPDIS);
+
+		write32p(GFXVT_BASE_ADDRESS + 0x100, 0x50a);
+
+		clrsetbits32p(VTVC0_BASE_ADDRESS + 0xf04, 0xf << 15, 1 << 15);
+
+		setbits32p(VTVC0_BASE_ADDRESS + ARCHDIS, DMAR_LCKDN);
+	}
 }
 
 void haswell_early_initialization(void)
@@ -186,9 +128,11 @@ void haswell_early_initialization(void)
 	haswell_setup_bars();
 
 	/* Setup IOMMU BARs */
-	haswell_setup_iommu();
+	northbridge_setup_iommu();
 
-	haswell_setup_peg();
+	if (!CONFIG(INTEL_LYNXPOINT_LP))
+		northbridge_setup_peg();
+
 	haswell_setup_igd();
 
 	haswell_setup_misc();

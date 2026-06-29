@@ -22,7 +22,7 @@ chip soc/intel/cannonlake
 
 # FSP Memory (soc/intel/cannonlake/romstage/fsp_params.c)
 	register "SaGv" = "SaGv_Enabled"
-	register "enable_c6dram" = "1"
+	register "enable_c6dram" = "true"
 
 # FSP Silicon (soc/intel/cannonlake/fsp_params.c)
 	# Serial I/O
@@ -123,10 +123,9 @@ chip soc/intel/cannonlake
 			smbios_slot_desc "SlotTypeM2Socket3" "SlotLengthOther" "M.2/M 2280" "SlotDataBusWidth4X"
 		end
 		device ref lpc_espi	on
-			register "gen1_dec" = "0x000c0081"
-			register "gen2_dec" = "0x00040069"
-			register "gen3_dec" = "0x00fc0e01"
-			register "gen4_dec" = "0x00fc0f01"
+			register "gen1_dec" = "0x00040069"
+			register "gen2_dec" = "0x00fc0e01"
+			register "gen3_dec" = "0x00fc0f01"
 			chip drivers/pc80/tpm
 				device pnp 0c31.0 on end
 			end

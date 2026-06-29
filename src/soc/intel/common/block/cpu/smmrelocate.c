@@ -10,7 +10,6 @@
 #include <cpu/x86/smm.h>
 #include <device/device.h>
 #include <device/pci.h>
-#include <device/pci_ops.h>
 #include <smp/node.h>
 #include <soc/msr.h>
 #include <soc/pci_devs.h>
@@ -164,7 +163,7 @@ void smm_relocation_handler(int cpu, uintptr_t curr_smbase,
 		relo_params->smrr_mask.lo |= SMRR_PHYS_MASK_LOCK;
 
 	/* Write SMRRs if supported */
-	if (mtrr_cap.lo & SMRR_SUPPORTED)
+	if (mtrr_cap.lo & MTRR_CAP_SMRR)
 		write_smrr(relo_params);
 }
 

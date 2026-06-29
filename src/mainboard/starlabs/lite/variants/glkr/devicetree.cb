@@ -22,8 +22,6 @@ chip soc/intel/apollolake
 	register "hdaudio_pwr_gate_enable"	= "1"
 	register "hdaudio_bios_config_lockdown"	= "1"
 
-	register "enhanced_cstates"		= "1"
-
 	register "pnp_settings"			= "PNP_PERF_POWER"
 
 	register "mod_phy_if_value"		= "0x12"
@@ -47,12 +45,7 @@ chip soc/intel/apollolake
 	register "pcie_rp_deemphasis_enable[4]"	= "1"
 	register "pcie_rp_deemphasis_enable[5]"	= "1"
 
-	# GPE configuration
-	register "gpe0_dw1"			= "PMC_GPE_NW_63_32"
-	register "gpe0_dw2"			= "PMC_GPE_N_95_64"
-	register "gpe0_dw3"			= "PMC_GPE_NW_31_0"
-
-	register "slp_s3_assertion_width_usecs"	= "28000"
+	register "slp_s3_assertion_width_usecs"	= "1000"
 
 	device domain 0 on
 		device ref igd		on
@@ -65,7 +58,7 @@ chip soc/intel/apollolake
 				device generic 0 on end
 			end
 		end
-		device ref pmc		on  end
+		device ref pmc		hidden  end
 		device ref p2sb		on  end
 		device ref fast_spi	on  end
 		device ref sram		on  end
@@ -80,19 +73,87 @@ chip soc/intel/apollolake
 		end
 		device ref xhci		on
 			# Motherboard USB 3.0 Type-C
-			register "usb2_port[0]"		= "PORT_EN(OC1)"
-			register "usb3_port[0]"		= "PORT_EN(OC1)"
+			register "usb2_port[0]"		= "PORT_EN(OC_SKIP)"
+			register "usb3_port[0]"		= "PORT_EN(OC_SKIP)"
 
 			# Motherboard USB 3.0 Type-A
-			register "usb2_port[1]"		= "PORT_EN(OC0)"
-			register "usb3_port[1]"		= "PORT_EN(OC0)"
+			register "usb2_port[1]"		= "PORT_EN(OC_SKIP)"
+			register "usb3_port[1]"		= "PORT_EN(OC_SKIP)"
 
 			# Daughterboard USB 3.0 Type-A
-			register "usb2_port[3]"		= "PORT_EN(OC1)"
-			register "usb3_port[4]"		= "PORT_EN(OC1)"
+			register "usb2_port[3]"		= "PORT_EN(OC_SKIP)"
+			register "usb3_port[4]"		= "PORT_EN(OC_SKIP)"
 
 			# Daughterboard SD Card
 			register "usb2_port[5]"		= "PORT_EN(OC_SKIP)"
+
+			# Internal Webcam
+			register "usb2_port[7]"		= "PORT_EN(OC_SKIP)"
+
+			chip drivers/usb/acpi
+				device ref xhci_root_hub on
+					chip drivers/usb/acpi
+						register "desc"			= ""Motherboard USB Type-C""
+						register "type"			= "UPC_TYPE_C_USB2_SS_SWITCH"
+						register "group"		= "ACPI_PLD_GROUP(0, 0)"
+						device ref usb2_port1 on end
+					end
+					chip drivers/usb/acpi
+						register "desc"			= ""Motherboard USB Type-C""
+						register "type"			= "UPC_TYPE_C_USB2_SS_SWITCH"
+						register "group"		= "ACPI_PLD_GROUP(0, 0)"
+						device ref usb3_port1 on end
+					end
+
+					chip drivers/usb/acpi
+						register "desc"			= ""Motherboard USB Type-A""
+						register "type"			= "UPC_TYPE_USB3_A"
+						register "group"		= "ACPI_PLD_GROUP(0, 1)"
+						device ref usb2_port2 on end
+					end
+					chip drivers/usb/acpi
+						register "desc"			= ""Motherboard USB Type-A""
+						register "type"			= "UPC_TYPE_USB3_A"
+						register "group"		= "ACPI_PLD_GROUP(0, 1)"
+						device ref usb3_port2 on end
+					end
+
+					chip drivers/usb/acpi
+						register "desc"			= ""Daughterboard USB Type-A""
+						register "type"			= "UPC_TYPE_USB3_A"
+						register "group"		= "ACPI_PLD_GROUP(0, 2)"
+						device ref usb2_port4 on end
+					end
+					chip drivers/usb/acpi
+						register "desc"			= ""Daughterboard USB Type-A""
+						register "type"			= "UPC_TYPE_USB3_A"
+						register "group"		= "ACPI_PLD_GROUP(0, 2)"
+						device ref usb3_port5 on end
+					end
+
+					chip drivers/usb/acpi
+						register "desc"			= ""SD Card Reader""
+						register "type"			= "UPC_TYPE_INTERNAL"
+						register "group"		= "ACPI_PLD_GROUP(0, 3)"
+						device ref usb2_port6 on end
+					end
+
+					chip drivers/usb/acpi
+						register "desc"			= ""CNVi Bluetooth""
+						register "type"			= "UPC_TYPE_INTERNAL"
+						register "is_intel_bluetooth"	= "1"
+						register "group"		= "ACPI_PLD_GROUP(0, 4)"
+						device ref usb2_port7 on end
+					end
+
+					chip drivers/usb/acpi
+						register "desc"			= ""Internal Webcam""
+						register "type"			= "UPC_TYPE_INTERNAL"
+						register "group"		= "ACPI_PLD_GROUP(0, 5)"
+						device ref usb2_port8 on end
+					end
+				end
+			end
 		end
 		device ref i2c4		on  end
 		device ref i2c7		on
@@ -100,7 +161,7 @@ chip soc/intel/apollolake
 		end
 		device ref uart0	on  end
 		device ref uart2	on  end
-		device ref spi2		on  end
+		device ref spi2		off end
 		device ref lpc_espi	on
 			register "gen1_dec"			= "0x00040069"
 			register "gen2_dec"			= "0x00fc0201"

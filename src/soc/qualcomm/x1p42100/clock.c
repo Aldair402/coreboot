@@ -612,7 +612,7 @@ enum cb_err usb_clock_configure_mux(enum clk_pipe_usb clk_type, u32 src_type)
 	return CB_SUCCESS;
 }
 
-static enum cb_err pll_init_and_set(struct x1p42100_ncc0_clock *ncc0, u32 l_val)
+enum cb_err pll_init_and_set(struct x1p42100_ncc0_clock *ncc0, u32 l_val)
 {
 	int ret;
 	struct alpha_pll_reg_val_config ncc0_pll_cfg = {0};
@@ -697,9 +697,9 @@ void enable_disp_clock_tcsr(void)
 
 static void speed_up_boot_cpu(void)
 {
-	/* 1363.2 MHz */
-	if (!pll_init_and_set(apss_ncc0, L_VAL_1363P2MHz))
-		printk(BIOS_DEBUG, "NCC Frequency bumped to 1.363(GHz)\n");
+	/* 3 GHz */
+	if (!pll_init_and_set(apss_ncc0, L_VAL_2995P2MHz))
+		printk(BIOS_DEBUG, "NCC Frequency bumped to 3.0(GHz)\n");
 }
 
 void clock_init(void)

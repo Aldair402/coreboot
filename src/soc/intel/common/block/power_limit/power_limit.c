@@ -6,6 +6,7 @@
 #include <drivers/intel/dptf/chip.h>
 #include <intelblocks/cpulib.h>
 #include <intelblocks/power_limit.h>
+#include <option.h>
 #include <soc/msr.h>
 #include <soc/pci_devs.h>
 #include <soc/soc_chip.h>
@@ -94,7 +95,6 @@ void set_power_limits(u8 power_limit_1_time,
 			/* Elkhartlake SoC does not shadow PKG_POWER_LIMIT MCHBAR settings
 			   to MSR correctly. */
 			if (CONFIG(SOC_INTEL_ELKHARTLAKE)) {
-				msr = rdmsr(MSR_PKG_POWER_LIMIT);
 				msr.hi = 0;
 				msr.lo = 0;
 				wrmsr(MSR_PKG_POWER_LIMIT, msr);
@@ -121,28 +121,33 @@ void set_power_limits(u8 power_limit_1_time,
 
 	/* Get power defaults for this SKU */
 	msr = rdmsr(MSR_PKG_POWER_SKU);
-	tdp = msr.lo & 0x7fff;
-	min_power = (msr.lo >> 16) & 0x7fff;
-	max_power = msr.hi & 0x7fff;
-	max_time = (msr.hi >> 16) & 0x7f;
+	tdp = msr.lo & PKG_POWER_LIMIT_MASK;
+	min_power = (msr.lo >> 16) & PKG_POWER_LIMIT_MASK;
+	max_power = msr.hi & PKG_POWER_LIMIT_MASK;
+	max_time = (msr.hi >> 16) & PKG_POWER_LIMIT_TIME_MASK;
 
 	printk(BIOS_INFO, "CPU TDP = %u Watts\n", tdp / power_unit);
 
 	if (power_limit_time_msr_to_sec[max_time] > power_limit_1_time)
 		power_limit_1_time = power_limit_time_msr_to_sec[max_time];
 
-	if (min_power > 0 && tdp < min_power)
-		tdp = min_power;
-
-	if (max_power > 0 && tdp > max_power)
-		tdp = max_power;
-
 	power_limit_1_val = power_limit_time_sec_to_msr[power_limit_1_time];
 
 	/* Set long term power limit to TDP */
 	limit.lo = 0;
-	tdp_pl1 = ((conf->tdp_pl1_override == 0) ?
-			tdp : (conf->tdp_pl1_override * power_unit));
+	const unsigned int tdp_pl1_override = get_uint_option("tdp_pl1_override", conf->tdp_pl1_override);
+	tdp_pl1 = tdp_pl1_override ? (tdp_pl1_override * power_unit) : tdp;
+	/* Validate against hardware limits */
+	if (min_power > 0 && tdp_pl1 < min_power) {
+		printk(BIOS_ERR, "PL1 %uW below hardware minimum %uW, clamping\n",
+				tdp_pl1 / power_unit, min_power / power_unit);
+		tdp_pl1 = min_power;
+	} else if (max_power > 0 && tdp_pl1 > max_power) {
+		printk(BIOS_ERR, "PL1 %uW exceeds hardware maximum %uW, clamping\n",
+				tdp_pl1 / power_unit, max_power / power_unit);
+		tdp_pl1 = max_power;
+	}
+
 	printk(BIOS_INFO, "CPU PL1 = %u Watts\n", tdp_pl1 / power_unit);
 	limit.lo |= (tdp_pl1 & PKG_POWER_LIMIT_MASK);
 
@@ -155,18 +160,26 @@ void set_power_limits(u8 power_limit_1_time,
 
 	/* Set short term power limit to 1.25 * TDP if no config given */
 	limit.hi = 0;
-	tdp_pl2 = (conf->tdp_pl2_override == 0) ?
-		(tdp * 125) / 100 : (conf->tdp_pl2_override * power_unit);
+	const unsigned int tdp_pl2_override = get_uint_option("tdp_pl2_override", conf->tdp_pl2_override);
+	tdp_pl2 = tdp_pl2_override ? (tdp_pl2_override * power_unit) : ((tdp * 125) / 100);
+	/* Ensure PL2 isn't less than PL1 */
+	if (tdp_pl2 < tdp_pl1)
+		tdp_pl2 = tdp_pl1;
 	printk(BIOS_INFO, "CPU PL2 = %u Watts\n", tdp_pl2 / power_unit);
 	limit.hi |= (tdp_pl2) & PKG_POWER_LIMIT_MASK;
 	limit.hi |= PKG_POWER_LIMIT_CLAMP;
 	limit.hi |= PKG_POWER_LIMIT_EN;
 
+	if (get_uint_option("pkg_power_limit_lock", 0)) {
+		limit.hi |= PKG_POWER_LIMIT_LOCK;
+		printk(BIOS_INFO, "Locking package power limits\n");
+	}
+
 	/* Power limit 2 time is only programmable on server SKU */
 	wrmsr(MSR_PKG_POWER_LIMIT, limit);
 
-	/* Set PL2 power limit values in MCHBAR and disable PL1 */
-	MCHBAR32(MCH_PKG_POWER_LIMIT_LO) = limit.lo & (~(PKG_POWER_LIMIT_EN));
+	/* Set package power limit values in MCHBAR */
+	MCHBAR32(MCH_PKG_POWER_LIMIT_LO) = limit.lo;
 	MCHBAR32(MCH_PKG_POWER_LIMIT_HI) = limit.hi;
 
 	/* Set PsysPl2 */
@@ -236,7 +249,7 @@ u8 get_cpu_tdp(void)
 
 	/* Get power defaults for this SKU */
 	msr = rdmsr(MSR_PKG_POWER_SKU);
-	cpu_tdp = msr.lo & 0x7fff;
+	cpu_tdp = msr.lo & PKG_POWER_LIMIT_MASK;
 
 	return cpu_tdp / power_unit;
 }

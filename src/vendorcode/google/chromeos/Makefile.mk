@@ -6,7 +6,6 @@ ramstage-$(CONFIG_HAVE_ACPI_TABLES) += acpi.c
 ramstage-$(CONFIG_CHROMEOS_RAMOOPS) += ramoops.c
 ramstage-y += vpd_mac.c vpd_serialno.c vpd_calibration.c
 ramstage-$(CONFIG_CHROMEOS_DISABLE_PLATFORM_HIERARCHY_ON_RESUME) += tpm2.c
-ramstage-$(CONFIG_HAVE_REGULATORY_DOMAIN) += wrdd.c
 ramstage-$(CONFIG_USE_SAR) += sar.c
 ramstage-$(CONFIG_TPM_GOOGLE) += cr50_enable_update.c
 ramstage-$(CONFIG_TPM_GOOGLE) += tpm_factory_config.c
@@ -24,6 +23,7 @@ romstage-$(CONFIG_CHROMEOS_DRAM_PART_NUMBER_IN_CBI) += dram_part_num_override.c
 
 ramstage-$(CONFIG_PLATFORM_HAS_LOW_BATTERY_INDICATOR) += battery.c
 ramstage-$(CONFIG_CHROMEOS_FW_SPLASH_SCREEN) += splash.c
+ramstage-$(CONFIG_FRAMEBUFFER_SPLASH_TEXT) += splash_text.c
 ramstage-$(CONFIG_CHROMEOS_PVMFW_CBMEM) += pvmfw_cbmem.c
 
 # Add logo to the cbfs image

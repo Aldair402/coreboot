@@ -19,7 +19,7 @@ chip soc/intel/tigerlake
 
 # FSP Memory (soc/intel/tigerlake/romstage/fsp_params.c)
 	# Enable C6 DRAM
-	register "enable_c6dram" = "1"
+	register "enable_c6dram" = "true"
 
 	# System Agent dynamic frequency support
 	register "SaGv" = "SaGv_Enabled"
@@ -66,7 +66,6 @@ chip soc/intel/tigerlake
 
 # Actual device tree
 	device domain 0 on
-		device ref system_agent on end
 		device ref igpu on
 			# DDIA is eDP
 			register "DdiPortAConfig" = "DDI_PORT_CFG_EDP"
@@ -134,6 +133,5 @@ chip soc/intel/tigerlake
 			register "PchHdaAudioLinkHdaEnable" = "1"
 		end
 		device ref smbus on end
-		device ref fast_spi on end
 	end
 end

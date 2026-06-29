@@ -2,6 +2,7 @@
 
 #include <console/console.h>
 #include <device/device.h>
+
 #include <cpu/cpu.h>
 #include <cpu/x86/mtrr.h>
 #include <cpu/x86/msr.h>
@@ -12,6 +13,7 @@
 #include <cpu/intel/turbo.h>
 #include <cpu/x86/name.h>
 #include <delay.h>
+#include <option.h>
 #include <northbridge/intel/haswell/haswell.h>
 #include <southbridge/intel/lynxpoint/pch.h>
 #include <cpu/intel/common/common.h>
@@ -260,6 +262,7 @@ void set_power_limits(u8 power_limit_1_time)
 	msr_t limit;
 	unsigned int power_unit;
 	unsigned int tdp, min_power, max_power, max_time;
+	unsigned int pl1, pl2;
 	u8 power_limit_1_val;
 
 	if (power_limit_1_time >= ARRAY_SIZE(power_limit_time_sec_to_msr))
@@ -292,17 +295,30 @@ void set_power_limits(u8 power_limit_1_time)
 
 	power_limit_1_val = power_limit_time_sec_to_msr[power_limit_1_time];
 
-	/* Set long term power limit to TDP */
+	const unsigned int pl1_override_w = get_uint_option("tdp_pl1_override", 0);
+	const unsigned int pl2_override_w = get_uint_option("tdp_pl2_override", 0);
+
+	/* Set long term power limit to TDP if not overridden */
 	limit.lo = 0;
-	limit.lo |= tdp & PKG_POWER_LIMIT_MASK;
+	pl1 = pl1_override_w ? (pl1_override_w * power_unit) : tdp;
+	printk(BIOS_DEBUG, "CPU PL1 = %u Watts\n", pl1 / power_unit);
+	limit.lo |= pl1 & PKG_POWER_LIMIT_MASK;
 	limit.lo |= PKG_POWER_LIMIT_EN;
 	limit.lo |= (power_limit_1_val & PKG_POWER_LIMIT_TIME_MASK) <<
 		PKG_POWER_LIMIT_TIME_SHIFT;
 
-	/* Set short term power limit to 1.25 * TDP */
+	/* Set short term power limit to 1.25 * TDP if not overridden */
 	limit.hi = 0;
-	limit.hi |= ((tdp * 125) / 100) & PKG_POWER_LIMIT_MASK;
+	pl2 = pl2_override_w ? (pl2_override_w * power_unit) : ((tdp * 125) / 100);
+	if (pl2 < pl1)
+		pl2 = pl1;
+	printk(BIOS_DEBUG, "CPU PL2 = %u Watts\n", pl2 / power_unit);
+	limit.hi |= pl2 & PKG_POWER_LIMIT_MASK;
 	limit.hi |= PKG_POWER_LIMIT_EN;
+	if (get_uint_option("cpu_power_limit_lock", 0)) {
+		limit.hi |= PKG_POWER_LIMIT_LOCK;
+		printk(BIOS_DEBUG, "Locking package power limits\n");
+	}
 	/* Power limit 2 time is only programmable on server SKU */
 
 	wrmsr(MSR_PKG_POWER_LIMIT, limit);
@@ -502,8 +518,6 @@ static void cpu_core_init(struct device *cpu)
 }
 
 /* MP initialization support. */
-static const void *microcode_patch;
-
 static void pre_mp_init(void)
 {
 	/* Setup MTRRs based on physical address size. */
@@ -534,10 +548,13 @@ static int get_cpu_count(void)
 	return num_threads;
 }
 
-static void get_microcode_info(const void **microcode, int *parallel)
+static void get_microcode_info(const void **microcode, size_t *size, int *parallel)
 {
-	microcode_patch = intel_microcode_find();
-	*microcode = microcode_patch;
+	const struct microcode *microcode_file = intel_microcode_find();
+	if (microcode_file != NULL)
+		*size = get_microcode_size(microcode_file);
+
+	*microcode = microcode_file;
 	*parallel = 1;
 }
 
@@ -547,6 +564,7 @@ static void per_cpu_smm_trigger(void)
 	smm_relocate();
 
 	/* After SMM relocation a 2nd microcode load is required. */
+	const void *microcode_patch = intel_microcode_find();
 	intel_microcode_load_unlocked(microcode_patch);
 }
 
@@ -585,6 +603,12 @@ void mp_init_cpus(struct bus *cpu_bus)
 			    MTRR_TYPE_WRPROT);
 }
 
+static void haswell_final(struct device *dev)
+{
+	/* Lock memory configuration to protect SMM */
+	msr_set(MSR_LT_LOCK_MEMORY, BIT(0));
+}
+
 static struct device_operations cpu_dev_ops = {
 	.init = cpu_core_init,
 };
@@ -597,11 +621,19 @@ static const struct cpu_device_id cpu_table[] = {
 	{ X86_VENDOR_INTEL, CPUID_HASWELL_ULT_C0, CPUID_EXACT_MATCH_MASK },
 	{ X86_VENDOR_INTEL, CPUID_CRYSTALWELL_B0, CPUID_EXACT_MATCH_MASK },
 	{ X86_VENDOR_INTEL, CPUID_CRYSTALWELL_C0, CPUID_EXACT_MATCH_MASK },
-	{ X86_VENDOR_INTEL, CPUID_BROADWELL_C0, CPUID_EXACT_MATCH_MASK },
+	{ X86_VENDOR_INTEL, CPUID_BROADWELL_G0, CPUID_EXACT_MATCH_MASK },
 	{ X86_VENDOR_INTEL, CPUID_BROADWELL_ULT_C0, CPUID_EXACT_MATCH_MASK },
 	{ X86_VENDOR_INTEL, CPUID_BROADWELL_ULT_D0, CPUID_EXACT_MATCH_MASK },
 	{ X86_VENDOR_INTEL, CPUID_BROADWELL_ULT_E0, CPUID_EXACT_MATCH_MASK },
 	CPU_TABLE_END
+};
+
+struct device_operations haswell_cpu_bus_ops = {
+	.read_resources   = noop_read_resources,
+	.set_resources    = noop_set_resources,
+	.init             = mp_cpu_bus_init,
+	.final            = haswell_final,
+	.acpi_fill_ssdt   = generate_cpu_entries,
 };
 
 static const struct cpu_driver driver __cpu_driver = {

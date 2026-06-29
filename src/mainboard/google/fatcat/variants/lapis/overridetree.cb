@@ -22,6 +22,10 @@ fw_config
 		option TOUCHSCREEN_SOC_INTERFACE_I2C_LPSS	1
 		option TOUCHSCREEN_SOC_INTERFACE_I2C_THC	2
 	end
+	field SENSOR_HUB 23 23
+		option ISH_ABSENT	0
+		option ISH_PRESENT	1
+	end
 	field FINGERPRINT_INTERFACE 24 25
 		option FINGERPRINT_INTERFACE_UNKNOWN	0
 		option FINGERPRINT_INTERFACE_SPI	1
@@ -40,13 +44,17 @@ fw_config
 		option TRACKPAD_SOC_INTERFACE_I2C_LPSS	1
 		option TRACKPAD_SOC_INTERFACE_I2C_THC	2
 	end
-	field KB_BACKLIGHT_PRESENT 43 43
+	field KB_BACKLIGHT 43 43
 		option KB_BACKLIGHT_ABSENT	0
 		option KB_BACKLIGHT_PRESENT	1
 	end
 	field WIFI_SAR 56 58
 		option WIFI_SAR_ID0	0
 		option WIFI_SAR_ID1	1
+	end
+	field FINGERPRINT_MCU 63 63
+		option FINGERPRINT_FT9001_FT9865	0
+		option FINGERPRINT_FT9001C_FT9849	1
 	end
 end
 
@@ -56,27 +64,12 @@ chip soc/intel/pantherlake
 	register "pmc_gpe0_dw1" = "GPP_F"
 	register "pmc_gpe0_dw2" = "GPP_E"
 
-	register "power_limits_config[PTL_CORE_1]" = "{
-		.tdp_pl1_override = 15,
-		.tdp_pl2_override = 25,
-	}"
-
-	register "power_limits_config[PTL_CORE_3]" = "{
-		.tdp_pl1_override = 25,
-		.tdp_pl2_override = 25,
-	}"
-
-	register "power_limits_config[PTL_CORE_4]" = "{
-		.tdp_pl1_override = 25,
-		.tdp_pl2_override = 25,
-	}"
-
 	register "usb2_ports[0]" = "USB2_PORT_TYPE_C(OC_SKIP)" # USB2_C0
 	register "usb2_ports[1]" = "USB2_PORT_TYPE_C(OC_SKIP)" # USB2_C1
 	register "usb2_ports[2]" = "USB2_PORT_MID(OC_SKIP)" # LED
 	register "usb2_ports[3]" = "USB2_PORT_MID(OC_SKIP)" # Type-A Port A0 (MB)
 	register "usb2_ports[4]" = "USB2_PORT_MID(OC_SKIP)" # Type-A Port A1 (DB)
-	register "usb2_ports[5]" = "USB2_PORT_MID(OC_SKIP)" # USB HUB (USB2 Camera)
+	register "usb2_ports[5]" = "USB2_PORT_LONG(OC_SKIP)" # USB HUB (USB2 Camera)
 	register "usb2_ports[6]" = "USB2_PORT_MID(OC_SKIP)" # Fingerprint
 	register "usb2_ports[7]" = "USB2_PORT_MID(OC_SKIP)" # Discrete Bluetooth
 
@@ -95,6 +88,9 @@ chip soc/intel/pantherlake
 			[DDI_PORT_A] = DDI_ENABLE_HPD,
 	}"
 
+	# VCCSA Shutdown configuration
+	register "vccsa_shutdown" = "1"  # enable (set to 0 for disable)
+
 	# Enable CNVi Wi-Fi and Bluetooth
 	register "cnvi_wifi_core" = "true"
 	register "cnvi_bt_core" = "true"
@@ -111,11 +107,36 @@ chip soc/intel/pantherlake
 	#| I2C3              | cr50 TPM.                 |
 	#+-------------------+---------------------------+
 	register "common_soc_config" = "{
+		.chipset_lockdown = CHIPSET_LOCKDOWN_COREBOOT,
+		/* Render OEM footer logo 200px above from the edge */
+		.logo_bottom_margin = 200,
 		.i2c[3] = {
 			.early_init=1,
 			.speed = I2C_SPEED_FAST,
 		},
 	}"
+
+	# As per document 813278, the following PTL SoC supports Fast
+	# V-Mode (FVM) on cores (IA), Graphics (GT), and System Agent
+	# (SA). The ICC Limit is represented in 1/4 A increments,
+	# i.e., a value of 400 = 100A.
+	register "enable_fast_vmode[VR_DOMAIN_IA]" = "false"
+	register "cep_enable[VR_DOMAIN_IA]" = "false"
+	register "enable_fast_vmode[VR_DOMAIN_GT]" = "false"
+	register "cep_enable[VR_DOMAIN_GT]" = "false"
+	register "enable_fast_vmode[VR_DOMAIN_SA]" = "false"
+	register "cep_enable[VR_DOMAIN_SA]" = "false"
+
+	# Acoustic Noise settings and slew rate configuration:
+	register "enable_acoustic_noise_mitigation" = "true"
+	register "disable_fast_pkgc_ramp[VR_DOMAIN_IA]" = "false"
+	register "slow_slew_rate_config[VR_DOMAIN_IA]" = "SLEW_FAST_4"
+	register "disable_fast_pkgc_ramp[VR_DOMAIN_GT]" = "true"
+	register "slow_slew_rate_config[VR_DOMAIN_GT]" = "SLEW_FAST_8"
+	register "disable_fast_pkgc_ramp[VR_DOMAIN_SA]" = "false"
+	register "slow_slew_rate_config[VR_DOMAIN_SA]" = "SLEW_FAST_4"
+	register "pcore_hysteresis_window_ms" = "50"	#ms
+	register "ecore_hysteresis_window_ms" = "50"	#ms
 
 	device domain 0 on
 		subsystemid 0x1043 0x15e4 inherit
@@ -279,7 +300,7 @@ chip soc/intel/pantherlake
 				device generic 0 on end
 			end
 		end
-		device ref ipu on end
+		device ref ipu off end
 		device ref iaa off end
 		device ref tbt_pcie_rp0 on end
 		device ref tbt_pcie_rp2 on end
@@ -394,11 +415,6 @@ chip soc/intel/pantherlake
 			.clk_req = 0,
 			.flags = PCIE_RP_CLK_REQ_DETECT | PCIE_RP_LTR | PCIE_RP_AER,
 			}"
-			chip soc/intel/common/block/pcie/rtd3
-				register "is_storage" = "true"
-				register "srcclk_pin" = "0"
-				device generic 0 on end
-			end
 		end # Gen4 SSD
 
 		device ref cnvi_wifi on
@@ -430,6 +446,8 @@ chip soc/intel/pantherlake
 				register "mode" = "THC_HID_I2C_MODE"
 				register "dev_hidi2c.intf.hidi2c.addr" = "0x15"
 				register "dev_hidi2c.intf.hidi2c.descriptor_address" = "0x01"
+				register "dev_hidi2c.intf.hidi2c.interrupt_delay_value" = "100"
+				register "dev_hidi2c.intf.hidi2c.max_frame_size_value" = "128"
 				register "soc_hidi2c.fm_scl_low_period" = "160"
 				register "soc_hidi2c.fm_scl_high_period" = "146"
 				register "wake_on_touch" = "true"
@@ -443,7 +461,7 @@ chip soc/intel/pantherlake
 			end
 		end #Trackpad
 		device ref thc1 on
-			register "thc_wake_on_touch[1]" = "true"
+			register "thc_wake_on_touch[1]" = "false"
 			register "thc_mode[1]" = "THC_HID_I2C_MODE"
 			probe TOUCHSCREEN TOUCHSCREEN_RAYDIUM
 			probe TOUCHSCREEN TOUCHSCREEN_ILITEK
@@ -454,8 +472,10 @@ chip soc/intel/pantherlake
 				register "dev_hidi2c.cid" = ""PNP0C50""
 				register "dev_hidi2c.intf.hidi2c.addr" = "0x39"
 				register "dev_hidi2c.intf.hidi2c.descriptor_address" = "0"
+				register "dev_hidi2c.intf.hidi2c.interrupt_delay_value" = "100"
+				register "dev_hidi2c.intf.hidi2c.max_frame_size_value" = "128"
 				register "enable_gpio" = "ACPI_GPIO_OUTPUT_ACTIVE_HIGH(GPP_F08)"
-				register "wake_on_touch" = "true"
+				register "wake_on_touch" = "false"
 				# NOTE: Use GpioInt() in _CRS and does not use GPE.
 				register "wake_gpio" = "ACPI_GPIO_IRQ_LEVEL_LOW_WAKE(GPP_VGPIO3_THC1)"
 				register "active_ltr" = "1"
@@ -473,8 +493,10 @@ chip soc/intel/pantherlake
 				register "dev_hidi2c.cid" = ""PNP0C50""
 				register "dev_hidi2c.intf.hidi2c.addr" = "0x41"
 				register "dev_hidi2c.intf.hidi2c.descriptor_address" = "0x0001"
+				register "dev_hidi2c.intf.hidi2c.interrupt_delay_value" = "100"
+				register "dev_hidi2c.intf.hidi2c.max_frame_size_value" = "128"
 				register "enable_gpio" = "ACPI_GPIO_OUTPUT_ACTIVE_HIGH(GPP_F08)"
-				register "wake_on_touch" = "true"
+				register "wake_on_touch" = "false"
 				# NOTE: Use GpioInt() in _CRS and does not use GPE.
 				register "wake_gpio" = "ACPI_GPIO_IRQ_LEVEL_LOW_WAKE(GPP_VGPIO3_THC1)"
 				register "active_ltr" = "1"
@@ -495,6 +517,7 @@ chip soc/intel/pantherlake
 						# SoundWire Link 3 ID 0
 						register "desc" = ""Headset Codec""
 						register "sub" = ""1337""
+						register "detect_us" = "DET_100_US"
 						device generic 3.0 on end
 					end
 					chip drivers/soundwire/cs35l56
@@ -514,6 +537,7 @@ chip soc/intel/pantherlake
 				end
 			end
 		end # SNDW
+		device ref smbus on end
 		device ref i2c0 on end
 		device ref i2c3 on
 			chip drivers/i2c/tpm

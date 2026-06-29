@@ -321,7 +321,7 @@ struct lb_gpio {
 #define ACTIVE_HIGH	1
 	uint32_t value;
 #define GPIO_MAX_NAME_LENGTH 16
-	uint8_t name[GPIO_MAX_NAME_LENGTH];
+	uint8_t __nonstring name[GPIO_MAX_NAME_LENGTH];
 };
 
 struct lb_gpios {
@@ -647,6 +647,10 @@ enum boot_mode_t {
 	LB_BOOT_MODE_LOW_BATTERY_CHARGING,
 	/* Device is booting in due to charger insertion */
 	LB_BOOT_MODE_OFFMODE_CHARGING,
+	/* Device is booting in due to RTC alarm */
+	LB_BOOT_MODE_RTC_WAKE,
+	/* Device is booting in "no-battery" */
+	LB_BOOT_MODE_NO_BATTERY,
 };
 
 /*

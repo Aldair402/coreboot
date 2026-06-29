@@ -26,6 +26,10 @@ config ARCH_POSTCAR_X86_32
 config ARCH_RAMSTAGE_X86_32
 	bool
 
+config ARCH_SMM_X86_32
+	bool
+	default ARCH_RAMSTAGE_X86_32 && !NO_SMM
+
 config ARCH_ALL_STAGES_X86_32
 	bool
 	default !ARCH_ALL_STAGES_X86_64
@@ -56,6 +60,10 @@ config ARCH_POSTCAR_X86_64
 config ARCH_RAMSTAGE_X86_64
 	bool
 	select SSE2
+
+config ARCH_SMM_X86_64
+	bool
+	default ARCH_RAMSTAGE_X86_64 && !NO_SMM
 
 config ARCH_ALL_STAGES_X86_64
 	bool
@@ -465,5 +473,25 @@ config SOC_BERT_SIZEOF_ERROR_SECTION
 	default n
 	help
 	  SoC selects this if it implements soc_bert_sizeof_error_section.
+
+config IOAPIC
+	bool
+	default y if SMP
+	default n
+
+config IOAPIC_8BIT_ID
+	bool
+	default n
+	depends on IOAPIC
+	help
+	  Select this option if the hardware support 8bit long IOAPIC IDs.
+
+config IOAPIC_USE_PRESET_ID
+	bool
+	default n
+	depends on IOAPIC
+	help
+	  Select this option if coreboot should keep IOAPIC IDs programmed
+	  by silicon vendor initialization code.
 
 endif

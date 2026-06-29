@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include <device/pci_def.h>
 #include <intelblocks/cse.h>
 #include <intelblocks/smihandler.h>
 #include <soc/soc_chip.h>
@@ -16,7 +15,7 @@
  */
 void smihandler_soc_at_finalize(void)
 {
-	if (CONFIG(DISABLE_HECI1_AT_PRE_BOOT))
+	if (soc_disable_heci1_at_pre_boot())
 		heci1_disable();
 }
 

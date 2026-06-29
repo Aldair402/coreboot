@@ -434,6 +434,72 @@
             "speedMbps": 8533,
             "lp5x": true
         }
+    },
+    {
+        "name": "BWMYAX32P8A-32G",
+        "attribs": {
+            "densityPerDieGb": 16,
+            "diesPerPackage": 2,
+            "bitWidthPerChannel": 16,
+            "ranksPerChannel": 1,
+            "speedMbps": 7500,
+            "lp5x": true
+        }
+    },
+    {
+        "name":  "MT62F2G32D4DS-020 WT:D",
+        "attribs": {
+            "densityPerDieGb": 16,
+            "diesPerPackage": 4,
+            "bitWidthPerChannel": 16,
+            "ranksPerChannel": 2,
+            "speedMbps": 8533,
+            "lp5x": true
+        }
+    },
+    {
+        "name": "H58G56DK9BX068",
+        "attribs": {
+            "densityPerDieGb": 16,
+            "diesPerPackage": 2,
+            "bitWidthPerChannel": 16,
+            "ranksPerChannel": 1,
+            "speedMbps": 9600,
+            "lp5x": true
+        }
+    },
+    {
+	"name": "SL5D32G32C2A-HC0",
+        "attribs": {
+            "densityPerDieGb": 16,
+            "diesPerPackage": 2,
+            "bitWidthPerChannel": 16,
+            "ranksPerChannel": 1,
+            "speedMbps": 7500,
+            "lp5x": true
+        }
+    },
+    {
+        "name": "K3KL9L90EM-MGCV",
+        "attribs": {
+            "densityPerDieGb": 16,
+            "diesPerPackage": 4,
+            "bitWidthPerChannel": 16,
+            "ranksPerChannel": 2,
+            "speedMbps": 9600,
+            "lp5x": true
+        }
+    },
+    {
+        "name": "H58G66EK9BX223",
+        "attribs": {
+            "densityPerDieGb": 16,
+            "diesPerPackage": 4,
+            "bitWidthPerChannel": 16,
+            "ranksPerChannel": 2,
+            "speedMbps": 9600,
+            "lp5x": true
+        }
     }
     ]
 }

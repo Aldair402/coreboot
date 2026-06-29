@@ -41,8 +41,8 @@ static void fill_fspm_igd_params(FSP_M_CONFIG *m_cfg,
 	};
 	m_cfg->InternalGraphics = !CONFIG(SOC_INTEL_DISABLE_IGD) && is_devfn_enabled(PCI_DEVFN_IGD);
 	if (m_cfg->InternalGraphics) {
-		/* IGD is enabled, set IGD stolen size to 64MB. */
-		m_cfg->IgdDvmt50PreAlloc = IGD_SM_64MB;
+		/* IGD is enabled, set IGD stolen size to 128MB. */
+		m_cfg->IgdDvmt50PreAlloc = IGD_SM_128MB;
 		/* DP port config */
 		m_cfg->DdiPortAConfig = config->ddi_port_A_config;
 		m_cfg->DdiPortBConfig = config->ddi_port_B_config;
@@ -96,11 +96,18 @@ static void fill_fspm_mrc_params(FSP_M_CONFIG *m_cfg,
 	m_cfg->LowerBasicMemTestSize = config->lower_basic_mem_test_size;
 }
 
+/* Default weak implementation that mainboards can override */
+__attribute__((weak)) bool mainboard_can_allow_flex_ratio_override(void)
+{
+    return true;
+}
+
 static void fill_fspm_cpu_params(FSP_M_CONFIG *m_cfg,
 				 const struct soc_intel_pantherlake_config *config)
 {
-	/* CpuRatio Settings */
-	if (config->cpu_ratio_override)
+	/* Skip CpuRatio override in recovery mode */
+	if (mainboard_can_allow_flex_ratio_override() && config->cpu_ratio_override)
+		/* CpuRatio Settings */
 		m_cfg->CpuRatio = config->cpu_ratio_override;
 	else
 		/* Set CpuRatio to match existing MSR value */
@@ -342,14 +349,21 @@ static void fill_fspm_vr_config_params(FSP_M_CONFIG *m_cfg,
 	if (!map)
 		return;
 
+	for (size_t i = 0; i < ARRAY_SIZE(config->cep_enable); i++) {
+		if (config->cep_enable[i])
+			m_cfg->CepEnable[i] = config->cep_enable[i];
+	}
+
+	/*
+	 * Only enable Fast Vmode when a valid IccLimit threshold exists
+	 */
 	for (size_t i = 0; i < ARRAY_SIZE(config->enable_fast_vmode); i++) {
-		if (!config->cep_enable[i])
+		if (!config->enable_fast_vmode[i])
 			continue;
-		m_cfg->CepEnable[i] = config->cep_enable[i];
-		if (config->enable_fast_vmode[i]) {
-			m_cfg->EnableFastVmode[i] = config->enable_fast_vmode[i];
-			m_cfg->IccLimit[i] = config->fast_vmode_i_trip[map->limits][i];
-		}
+		if (!config->fast_vmode_i_trip[map->sku][i])
+			continue;
+		m_cfg->EnableFastVmode[i] = config->enable_fast_vmode[i];
+		m_cfg->IccLimit[i] = config->fast_vmode_i_trip[map->sku][i];
 	}
 
 	for (size_t i = 0; i < ARRAY_SIZE(config->thermal_design_current[0]); i++) {
@@ -366,8 +380,10 @@ static void fill_fspm_vr_config_params(FSP_M_CONFIG *m_cfg,
 	}
 
 	for (size_t i = 0; i < ARRAY_SIZE(config->tdc_mode); i++) {
-		m_cfg->TdcMode[i] = config->tdc_mode[i];
-		m_cfg->TdcTimeWindow[i] = config->tdc_time_window_ms[i];
+		if (config->tdc_mode[i])
+			m_cfg->TdcMode[i] = config->tdc_mode[i];
+		if (config->tdc_time_window_ms[i])
+			m_cfg->TdcTimeWindow[i] = config->tdc_time_window_ms[i];
 	}
 
 	for (size_t i = 0; i < ARRAY_SIZE(config->ps1_threshold); i++) {
@@ -378,6 +394,8 @@ static void fill_fspm_vr_config_params(FSP_M_CONFIG *m_cfg,
 		if (config->ps3_threshold[i])
 			m_cfg->Ps3Threshold[i] = config->ps3_threshold[i];
 	}
+
+	m_cfg->VccsaShutdown = config->vccsa_shutdown;
 }
 
 #if CONFIG(PLATFORM_HAS_EARLY_LOW_BATTERY_INDICATOR)

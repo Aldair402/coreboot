@@ -4,103 +4,228 @@
 #include <console/cfr.h>
 #include <drivers/option/cfr_frontend.h>
 #include <ec/starlabs/merlin/cfr.h>
+#include <intelblocks/aspm.h>
 #include <intelblocks/cfr.h>
 #include <common/cfr.h>
 
-static struct sm_obj_form performance_group = {
-	.ui_name = "Performance",
-	.obj_list = (const struct sm_object *[]) {
-		&fan_mode,
-		&memory_speed,
-		&power_profile,
-		NULL
-	},
+#if CONFIG(BOARD_STARLABS_BYTE_ADL) || CONFIG(BOARD_STARLABS_BYTE_TWL)
+static const struct pcie_pm_option_names pciexp_lan1_names = {
+	.clk_pm = "pciexp_lan1_clk_pm",
+	.aspm = "pciexp_lan1_aspm",
+	.l1ss = "pciexp_lan1_l1ss",
+	.speed = "pciexp_speed",
 };
 
-static struct sm_obj_form processor_group = {
-	.ui_name = "Processor",
-	.obj_list = (const struct sm_object *[]) {
-		&me_state,
-		&me_state_counter,
-		&s0ix_enable,
-		&vtd,
-		NULL
-	},
+static const struct pcie_pm_option_names pciexp_lan2_names = {
+	.clk_pm = "pciexp_lan2_clk_pm",
+	.aspm = "pciexp_lan2_aspm",
+	.l1ss = "pciexp_lan2_l1ss",
+	.speed = "pciexp_speed",
+};
+#endif
+
+static const struct pcie_pm_option_names pciexp_ssd_names = {
+	.clk_pm = "pciexp_ssd_clk_pm",
+	.aspm = "pciexp_ssd_aspm",
+	.l1ss = "pciexp_ssd_l1ss",
+	.speed = "pciexp_speed",
 };
 
-static struct sm_obj_form power_group = {
-	.ui_name = "Power",
-	.obj_list = (const struct sm_object *[]) {
-		&max_charge,
-		&charging_speed,
-		&power_led,
-		&charge_led,
-		&power_on_after_fail_bool,
-		NULL
+void mainboard_get_pcie_pm_options(const struct pcie_rp_config *rp_cfg,
+				   unsigned int index,
+				   bool is_cpu_rp,
+				   struct pcie_pm_option_names *names)
+{
+	(void)rp_cfg;
+
+	if (!names || is_cpu_rp)
+		return;
+
+#if CONFIG(BOARD_STARLABS_ADL_HORIZON) || CONFIG(BOARD_STARLABS_LITE_ADL)
+	if (index == PCH_RP(9))
+		*names = pciexp_ssd_names;
+#elif CONFIG(BOARD_STARLABS_BYTE_ADL) || CONFIG(BOARD_STARLABS_BYTE_TWL)
+	switch (index) {
+	case PCH_RP(9):
+		*names = pciexp_lan1_names;
+		return;
+	case PCH_RP(10):
+		*names = pciexp_lan2_names;
+		return;
+	case PCH_RP(12):
+		*names = pciexp_ssd_names;
+		return;
+	}
+#endif
+}
+
+#if CONFIG(SYSTEM_TYPE_LAPTOP) || CONFIG(SYSTEM_TYPE_DETACHABLE)
+static struct sm_obj_form audio_video_group = {
+	.ui_name = "Audio/Video",
+	.obj_list = (const struct sm_object *[]){
+		&microphone,
+		&hda_dsp,
+		&webcam,
+		NULL,
 	},
 };
+#endif
 
+static struct sm_obj_form battery_group = {
+	.ui_name = "Battery",
+	.obj_list =
+		(const struct sm_object *[]){
+#if CONFIG(EC_STARLABS_CHARGING_SPEED)
+					     &charging_speed,
+#endif
+#if CONFIG(SYSTEM_TYPE_LAPTOP) || CONFIG(SYSTEM_TYPE_DETACHABLE)
+					     &max_charge,
+#endif
+					     &power_on_after_fail_bool, NULL},
+};
+
+static struct sm_obj_form debug_group = {
+	.ui_name = "Debug",
+	.obj_list = (const struct sm_object *[]){&debug_level, NULL},
+};
+
+#if CONFIG(EC_STARLABS_POWER_LED) || CONFIG(EC_STARLABS_CHARGE_LED)
+static struct sm_obj_form leds_group = {
+	.ui_name = "LEDs",
+	.obj_list =
+		(const struct sm_object *[]){
+#if CONFIG(EC_STARLABS_CHARGE_LED)
+					     &charge_led,
+#endif
+#if CONFIG(EC_STARLABS_POWER_LED)
+					     &power_led,
+#endif
+					     NULL, },
+};
+#endif
+
+#if CONFIG(SYSTEM_TYPE_LAPTOP)
 static struct sm_obj_form keyboard_group = {
 	.ui_name = "Keyboard",
-	.obj_list = (const struct sm_object *[]) {
-		&kbl_timeout,
-		&fn_ctrl_swap,
-		NULL
-	},
+	.obj_list = (const struct sm_object *[]){&fn_ctrl_swap, &kbl_timeout, NULL},
+};
+#endif
+
+#if CONFIG(BOARD_STARLABS_LITE_ADL)
+static struct sm_obj_form display_group = {
+	.ui_name = "Display",
+	.obj_list =
+		(const struct sm_object *[]){
+					     &accelerometer,
+					     &touchscreen,
+					     NULL, },
 };
 
-static struct sm_obj_form devices_group = {
-	.ui_name = "Devices",
-	.obj_list = (const struct sm_object *[]) {
-		&bluetooth,
-		&display_native_res,
-		&gna,
-		&lid_switch,
-		&microphone,
-		&webcam,
-		&wifi,
-		NULL
-	},
+static struct sm_obj_form io_expansion_group = {
+	.ui_name = "I/O / Expansion",
+	.obj_list =
+		(const struct sm_object *[]){
+					     &card_reader,
+					     NULL, },
+};
+#endif
+
+static struct sm_obj_form pcie_power_management_group = {
+	.ui_name = "PCIe Power Management",
+	.obj_list =
+			(const struct sm_object *[]){
+#if CONFIG(BOARD_STARLABS_ADL_HORIZON) || CONFIG(BOARD_STARLABS_LITE_ADL)
+					     &pciexp_ssd_clk_pm,
+					     &pciexp_ssd_aspm,
+					     &pciexp_ssd_l1ss,
+#elif CONFIG(BOARD_STARLABS_BYTE_ADL) || CONFIG(BOARD_STARLABS_BYTE_TWL)
+					     &pciexp_lan1_clk_pm,
+					     &pciexp_lan1_aspm,
+					     &pciexp_lan1_l1ss,
+					     &pciexp_lan2_clk_pm,
+					     &pciexp_lan2_aspm,
+					     &pciexp_lan2_l1ss,
+					     &pciexp_ssd_clk_pm,
+					     &pciexp_ssd_aspm,
+					     &pciexp_ssd_l1ss,
+#endif
+					     NULL, },
+};
+
+static struct sm_obj_form performance_group = {
+	.ui_name = "Performance",
+	.obj_list =
+		(const struct sm_object *[]){
+#if CONFIG(EC_STARLABS_FAN)
+					     &fan_mode,
+#endif
+					     &gna,
+#if CONFIG(SYSTEM_TYPE_LAPTOP) || CONFIG(SYSTEM_TYPE_DETACHABLE)
+					     &memory_speed,
+#endif
+					     &power_profile,
+					     &pl1_override,
+					     &pl2_override,
+#if CONFIG(STARLABS_LEGACY_PL4)
+					     &pl4_override,
+#endif
+					     &tcc_temp,
+					     NULL},
 };
 
 static struct sm_obj_form security_group = {
 	.ui_name = "Security",
-	.obj_list = (const struct sm_object *[]) {
-		&bios_lock,
-		&intel_tme,
-		NULL
-	},
+	.obj_list = (const struct sm_object *[]){&bios_lock, &intel_tme, &me_state,
+						 &me_state_counter,
+#if CONFIG(SOC_INTEL_ALDERLAKE)
+						 &ibecc,
+#endif
+						 NULL},
 };
 
-static struct sm_obj_form pci_group = {
-	.ui_name = "PCI",
-	.obj_list = (const struct sm_object *[]) {
-		&pciexp_clk_pm,
-		&pciexp_aspm,
-		&pciexp_l1ss,
-		NULL
-	},
+static struct sm_obj_form suspend_lid_group = {
+	.ui_name = "Suspend & Lid",
+	.obj_list =
+		(const struct sm_object *[]){
+#if CONFIG(EC_STARLABS_LID_SWITCH)
+					     &lid_switch,
+#endif
+					     &s0ix_enable, NULL},
 };
 
-static struct sm_obj_form coreboot_group = {
-	.ui_name = "coreboot",
-	.obj_list = (const struct sm_object *[]) {
-		&debug_level,
-		NULL
-	},
+static struct sm_obj_form virtualization_group = {
+	.ui_name = "Virtualization",
+	.obj_list = (const struct sm_object *[]){&vtd, NULL},
+};
+
+static struct sm_obj_form wireless_group = {
+	.ui_name = "Wireless",
+	.obj_list = (const struct sm_object *[]){&bluetooth, &bluetooth_rtd3, &wifi, NULL},
 };
 
 static struct sm_obj_form *sm_root[] = {
-	&performance_group,
-	&processor_group,
-	&power_group,
+#if CONFIG(SYSTEM_TYPE_LAPTOP) || CONFIG(SYSTEM_TYPE_DETACHABLE)
+	&audio_video_group,
+#endif
+	&battery_group,
+	&debug_group,
+#if CONFIG(BOARD_STARLABS_LITE_ADL)
+	&display_group,
+	&io_expansion_group,
+#endif
+#if CONFIG(SYSTEM_TYPE_LAPTOP)
 	&keyboard_group,
-	&devices_group,
+#endif
+#if CONFIG(EC_STARLABS_POWER_LED) || CONFIG(EC_STARLABS_CHARGE_LED)
+	&leds_group,
+#endif
+	&pcie_power_management_group,
+	&performance_group,
 	&security_group,
-	&pci_group,
-	&coreboot_group,
-	NULL
-};
+	&suspend_lid_group,
+	&virtualization_group,
+	&wireless_group,
+	NULL};
 
 void mb_cfr_setup_menu(struct lb_cfr *cfr_root)
 {

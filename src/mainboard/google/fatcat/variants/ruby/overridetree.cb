@@ -62,16 +62,33 @@ chip soc/intel/pantherlake
 		.tdp_pl4 = 150,
 	}"
 
-	register "fast_vmode_i_trip[PTL_CORE_1]" = "{
+	register "fast_vmode_i_trip[PTL_SKU_1]" = "{
 		[VR_DOMAIN_IA] = 74 * 4,
 		[VR_DOMAIN_GT] = 38 * 4,
 		[VR_DOMAIN_SA] = 38 * 4
 	}"
-	register "fast_vmode_i_trip[PTL_CORE_2]" = "{
+	register "fast_vmode_i_trip[PTL_SKU_5]" = "{
 		[VR_DOMAIN_IA] = 74 * 4,
 		[VR_DOMAIN_GT] = 38 * 4,
 		[VR_DOMAIN_SA] = 38 * 4
 	}"
+
+	# Acoustic Noise settings and slew rate configuration:
+	register "enable_acoustic_noise_mitigation" = "true"
+	# Slew rate for IA Domain: Fast/4
+	register "slow_slew_rate_config[VR_DOMAIN_IA]" = "SLEW_FAST_4"
+	# Slew rate for GT Domain: Fast/2
+	register "slow_slew_rate_config[VR_DOMAIN_GT]" = "SLEW_FAST_2"
+	# Slew rate for ATOM Domain: Fast/4
+	register "slow_slew_rate_config[VR_DOMAIN_ATOM]" = "SLEW_FAST_4"
+	register "disable_fast_pkgc_ramp[VR_DOMAIN_IA]" = "true"
+	register "disable_fast_pkgc_ramp[VR_DOMAIN_GT]" = "true"
+	register "disable_fast_pkgc_ramp[VR_DOMAIN_ATOM]" = "true"
+	register "pcore_hysteresis_window_ms" = "3"
+	register "ecore_hysteresis_window_ms" = "3"
+
+	# VCCSA Shutdown mitigation setting
+	register "vccsa_shutdown" = "1"
 
 	register "usb2_ports[0]" = "USB2_PORT_TYPE_C(OC_SKIP)"	# USB2_C0
 	register "usb2_ports[1]" = "USB2_PORT_TYPE_C(OC_SKIP)"	# USB2_C1
@@ -125,8 +142,8 @@ chip soc/intel/pantherlake
 	#| I2C5              | Touchscreen               |
 	#+-------------------+---------------------------+
 	register "common_soc_config" = "{
-		/* Render OEM footer logo 100px above from the edge */
-		.logo_bottom_margin = 100,
+		/* Render OEM footer logo 200px above from the edge */
+		.logo_bottom_margin = 200,
 		.chipset_lockdown = CHIPSET_LOCKDOWN_COREBOOT,
 		.i2c[0] = {
 			.speed = I2C_SPEED_FAST,
@@ -172,7 +189,94 @@ chip soc/intel/pantherlake
 			    device generic 0 on end
 			end
 		end
+		device ref dtt on
+			chip drivers/intel/dptf
+				## sensor information
+				register "options.tsr[0].desc" = ""DDR_SOC""
+				register "options.tsr[1].desc" = ""Charger""
+				register "options.tsr[2].desc" = ""5V choke""
 
+				## Active Policy
+				# FIXME: below values are initial reference values only
+				register "policies.active" = "{
+						[0] = {
+							.target = DPTF_TEMP_SENSOR_0,
+							.thresholds = {
+									TEMP_PCT(75, 88),
+									TEMP_PCT(70, 78),
+									TEMP_PCT(65, 68),
+									TEMP_PCT(60, 58),
+
+								}
+							},
+						[1] = {
+							.target = DPTF_TEMP_SENSOR_1,
+							.thresholds = {
+									TEMP_PCT(80, 88),
+									TEMP_PCT(75, 78),
+									TEMP_PCT(70, 68),
+									TEMP_PCT(65, 58),
+
+								}
+							},
+						[2] = {
+							.target = DPTF_TEMP_SENSOR_2,
+							.thresholds = {
+									TEMP_PCT(75, 88),
+									TEMP_PCT(70, 78),
+									TEMP_PCT(65, 68),
+									TEMP_PCT(60, 58),
+								}
+							}
+				}"
+
+				## Passive Policy
+				# TODO: below values are initial reference values only
+				register "policies.passive" = "{
+						[0] = DPTF_PASSIVE(CPU,         CPU,           95, 5000),
+						[1] = DPTF_PASSIVE(CPU,         TEMP_SENSOR_0, 85, 5000),
+						[2] = DPTF_PASSIVE(CPU,         TEMP_SENSOR_1, 85, 5000),
+						[3] = DPTF_PASSIVE(CHARGER,     TEMP_SENSOR_2, 80, 5000),
+				}"
+
+				## Critical Policy
+				# TODO: below values are initial reference values only
+				register "policies.critical" = "{
+						[0] = DPTF_CRITICAL(CPU,          100, SHUTDOWN),
+						[1] = DPTF_CRITICAL(TEMP_SENSOR_0, 90, SHUTDOWN),
+						[2] = DPTF_CRITICAL(TEMP_SENSOR_1, 90, SHUTDOWN),
+						[3] = DPTF_CRITICAL(TEMP_SENSOR_2, 85, SHUTDOWN),
+				}"
+
+				## Power Limits Control
+				register "controls.power_limits" = "{
+						.pl1 = {
+							.min_power = 12000,
+							.max_power = 15000,
+							.time_window_min = 28 * MSECS_PER_SEC,
+							.time_window_max = 32 * MSECS_PER_SEC,
+							.granularity = 200,
+						},
+						.pl2 = {
+							.min_power = 35000,
+							.max_power = 35000,
+							.time_window_min = 28 * MSECS_PER_SEC,
+							.time_window_max = 32 * MSECS_PER_SEC,
+							.granularity = 1000,
+						}
+				}"
+
+				## Charger Performance Control (Control, mA)
+				register "controls.charger_perf" = "{
+						[0] = { 255, 3000 },
+						[1] = {  24, 1500 },
+						[2] = {  16, 1000 },
+						[3] = {   8,  500 }
+				}"
+
+				device generic 0 alias dptf_policy on end
+			end
+		end
 		device ref iaa off end
 		device ref tbt_pcie_rp0 on end
 		device ref tbt_pcie_rp1 on end
@@ -277,7 +381,12 @@ chip soc/intel/pantherlake
 			end
 		end # CNVi
 
-		device ref cnvi_bluetooth on end
+		device ref cnvi_bluetooth on
+			chip soc/intel/common/block/cnvi
+				register "wake" = "GPE0_PME_B0"
+				device generic 0 on end
+			end
+		end
 
 		# NOTE: i2c0 is function 0; hence it needs to be enabled when any of i2c1-5 is enabled.
 		# TPM device is under i2c3. Therefore, i2c0 needs to be enabled anyways.

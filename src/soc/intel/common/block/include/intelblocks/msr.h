@@ -101,6 +101,7 @@
 #define PKG_POWER_LIMIT_TIME_MASK	(0x7f)
 #define PKG_POWER_LIMIT_DUTYCYCLE_SHIFT 24
 #define PKG_POWER_LIMIT_DUTYCYCLE_MASK  (0x7f)
+#define PKG_POWER_LIMIT_LOCK		(1 << 31)
 
 #define MSR_CORE_MKTME_ACTIVATION	0x9ff
 /* SMM save state MSRs */
@@ -110,8 +111,6 @@
 #define MSR_L2_QOS_MASK(reg)		(0xd10 + reg)
 
 /* MTRR_CAP_MSR bits */
-#define SMRR_SUPPORTED			(1<<11)
-#define PRMRR_SUPPORTED			(1<<12)
 #define SMRR_LOCK_SUPPORTED		(1<<14)
 
 #define SGX_SUPPORTED			(1<<2)

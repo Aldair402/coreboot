@@ -2,7 +2,7 @@
 
 /*
  * This is a ramstage driver for the Intel Management Engine found in the
- * 6-series chipset.  It handles the required boot-time messages over the
+ * 8 / 9 series PCH.  It handles the required boot-time messages over the
  * MMIO-based Management Engine Interface to tell the ME that the BIOS is
  * finished with POST.  Additional messages are defined for debug but are
  * not used unless the console loglevel is high enough.
@@ -506,7 +506,6 @@ static int mkhi_end_of_post(void)
 	u32 eop_ack;
 
 	/* Send request and wait for response */
-	printk(BIOS_NOTICE, "ME: %s\n", __func__);
 	if (mei_sendrecv_mkhi(&mkhi, NULL, 0, &eop_ack, sizeof(eop_ack)) < 0) {
 		printk(BIOS_ERR, "ME: END OF POST message failed\n");
 		return -1;
@@ -516,18 +515,83 @@ static int mkhi_end_of_post(void)
 	return 0;
 }
 
-void intel_me_finalize(struct device *dev)
+/* TODO: Unify ME finalisation between LPT and WPT */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+
+/* Send END OF POST message to the ME */
+static int mkhi_end_of_post_noack(void)
 {
+	struct mkhi_header mkhi = {
+		.group_id	= MKHI_GROUP_ID_GEN,
+		.command	= MKHI_END_OF_POST_NOACK,
+	};
+
+	/* Send request, do not wait for response */
+	if (mei_sendrecv_mkhi(&mkhi, NULL, 0, NULL, 0) < 0) {
+		printk(BIOS_ERR, "ME: END OF POST NOACK message failed\n");
+		return -1;
+	}
+
+	printk(BIOS_INFO, "ME: END OF POST NOACK message successful\n");
+	return 0;
+}
+
+/* Send HMRFPO LOCK message to the ME */
+static int mkhi_hmrfpo_lock(void)
+{
+	struct mkhi_header mkhi = {
+		.group_id	= MKHI_GROUP_ID_HMRFPO,
+		.command	= MKHI_HMRFPO_LOCK,
+	};
+	u32 ack;
+
+	/* Send request and wait for response */
+	if (mei_sendrecv_mkhi(&mkhi, NULL, 0, &ack, sizeof(ack)) < 0) {
+		printk(BIOS_ERR, "ME: HMRFPO LOCK message failed\n");
+		return -1;
+	}
+
+	printk(BIOS_INFO, "ME: HMRFPO LOCK message successful (%d)\n", ack);
+	return 0;
+}
+
+/* Send HMRFPO LOCK message to the ME, do not wait for response */
+static int mkhi_hmrfpo_lock_noack(void)
+{
+	struct mkhi_header mkhi = {
+		.group_id	= MKHI_GROUP_ID_HMRFPO,
+		.command	= MKHI_HMRFPO_LOCK_NOACK,
+	};
+
+	/* Send request, do not wait for response */
+	if (mei_sendrecv_mkhi(&mkhi, NULL, 0, NULL, 0) < 0) {
+		printk(BIOS_ERR, "ME: HMRFPO LOCK NOACK message failed\n");
+		return -1;
+	}
+
+	printk(BIOS_INFO, "ME: HMRFPO LOCK NOACK message successful\n");
+	return 0;
+}
+
+#endif
+
+static void intel_me_finalize(struct device *dev)
+{
+	/* TODO: Unify ME finalisation between LPT and WPT */
+#if !CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
 	union me_hfs hfs;
 	u32 reg32;
 
 	reg32 = pci_read_config32(dev, PCI_BASE_ADDRESS_0);
 	mei_base_address = (u8 *)(uintptr_t)(reg32 & ~PCI_BASE_ADDRESS_MEM_ATTR_MASK);
+#endif
 
 	/* S3 path will have hidden this device already */
 	if (!mei_base_address || mei_base_address == (u8 *)0xfffffff0)
 		return;
 
+	/* TODO: Unify ME finalisation between LPT and WPT */
+#if !CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
 	/* Wait for ME MBP Cleared indicator */
 	intel_me_mbp_clear(dev);
 
@@ -542,6 +606,7 @@ void intel_me_finalize(struct device *dev)
 
 	/* Try to send EOP command so ME stops accepting other commands */
 	mkhi_end_of_post();
+#endif
 
 	if (!get_uint_option("me_disable", CONFIG(DISABLE_ME_PCI)))
 		return;
@@ -552,6 +617,7 @@ void intel_me_finalize(struct device *dev)
 
 	/* Hide the PCI device */
 	RCBA32_OR(FD2, PCH_DISABLE_MEI1);
+	RCBA32(FD2);
 }
 
 static int me_icc_set_clock_enables(u32 mask)
@@ -713,6 +779,23 @@ static int intel_me_extend_valid(struct device *dev)
 	return 0;
 }
 
+static void intel_me_print_mbp(struct me_bios_payload *mbp_data)
+{
+	me_print_fw_version(mbp_data->fw_version_name);
+
+	if (CONFIG(DEBUG_INTEL_ME))
+		me_print_fwcaps(mbp_data->fw_capabilities);
+
+	if (mbp_data->plat_time) {
+		printk(BIOS_DEBUG, "ME: Wake Event to ME Reset:      %u ms\n",
+		       mbp_data->plat_time->wake_event_mrst_time_ms);
+		printk(BIOS_DEBUG, "ME: ME Reset to Platform Reset:  %u ms\n",
+		       mbp_data->plat_time->mrst_pltrst_time_ms);
+		printk(BIOS_DEBUG, "ME: Platform Reset to CPU Reset: %u ms\n",
+		       mbp_data->plat_time->pltrst_cpurst_time_ms);
+	}
+}
+
 static u32 me_to_host_words_pending(void)
 {
 	union mei_csr me = read_me_csr();
@@ -732,6 +815,7 @@ struct mbp_payload {
  *
  * Return -1 to indicate a problem (give up)
  * Return 0 to indicate success (send LOCK+EOP)
+ * Return 1 to indicate success (send LOCK+EOP with NOACK)
  */
 static int intel_me_read_mbp(struct me_bios_payload *mbp_data, struct device *dev)
 {
@@ -741,16 +825,19 @@ static int intel_me_read_mbp(struct me_bios_payload *mbp_data, struct device *de
 	union me_hfs2 hfs2 = { .raw = pci_read_config32(dev, PCI_ME_HFS2) };
 	struct mbp_payload *mbp;
 	int i;
+	int ret = 0;
 
 	if (!hfs2.mbp_rdy) {
 		printk(BIOS_ERR, "ME: MBP not ready\n");
-		goto mbp_failure;
+		intel_me_mbp_give_up(dev);
+		return -1;
 	}
 
 	me2host_pending = me_to_host_words_pending();
 	if (!me2host_pending) {
 		printk(BIOS_ERR, "ME: no mbp data!\n");
-		goto mbp_failure;
+		intel_me_mbp_give_up(dev);
+		return -1;
 	}
 
 	/* we know for sure that at least the header is there */
@@ -762,11 +849,14 @@ static int intel_me_read_mbp(struct me_bios_payload *mbp_data, struct device *de
 		       " buffer contains %d words\n",
 		       mbp_hdr.num_entries, mbp_hdr.mbp_size,
 		       me2host_pending);
-		goto mbp_failure;
+		intel_me_mbp_give_up(dev);
+		return -1;
 	}
 	mbp = malloc(mbp_hdr.mbp_size * sizeof(u32));
-	if (!mbp)
-		goto mbp_failure;
+	if (!mbp) {
+		intel_me_mbp_give_up(dev);
+		return -1;
+	}
 
 	mbp->header = mbp_hdr;
 	me2host_pending--;
@@ -777,61 +867,91 @@ static int intel_me_read_mbp(struct me_bios_payload *mbp_data, struct device *de
 		i++;
 	}
 
-	/* Signal to the ME that the host has finished reading the MBP. */
 	host = read_host_csr();
+
+	/*
+	 * FIXME: Replace preprocessor once we know the correct flows
+	 * for each ME version. There does not seem to be ANY mention
+	 * of the "no-ack" versions of E ND OF POST / HMRFPO LOCK MKHI
+	 * messages that Wildcat Point code makes use of. Can they be
+	 * used on ME 9.x (LPT) or are they ME 10.x (WPT-LP) only?
+	 */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+	/* Check that read and write pointers are equal. */
+	if (host.buffer_read_ptr != host.buffer_write_ptr) {
+		printk(BIOS_INFO, "ME: MBP Read/Write pointer mismatch\n");
+		printk(BIOS_INFO, "ME: MBP Waiting for MBP cleared flag\n");
+
+		/* Tell ME that the host has finished reading the MBP. */
+		host.interrupt_generate = 1;
+		host.reset = 0;
+		write_host_csr(host);
+
+		/* Wait for the mbp_cleared indicator. */
+		intel_me_mbp_clear(dev);
+	} else {
+		/* Indicate NOACK messages should be used. */
+		ret = 1;
+	}
+#else
+	/* Signal to the ME that the host has finished reading the MBP. */
 	host.interrupt_generate = 1;
 	write_host_csr(host);
+#endif
 
 	/* Dump out the MBP contents. */
-	if (CONFIG_DEFAULT_CONSOLE_LOGLEVEL >= BIOS_DEBUG) {
+	if (CONFIG(DEBUG_INTEL_ME)) {
 		printk(BIOS_INFO, "ME MBP: Header: items: %d, size dw: %d\n",
 		       mbp->header.num_entries, mbp->header.mbp_size);
-		if (CONFIG(DEBUG_INTEL_ME)) {
-			for (i = 0; i < mbp->header.mbp_size - 1; i++) {
-				printk(BIOS_INFO, "ME MBP: %04x: 0x%08x\n", i, mbp->data[i]);
-			}
-		}
+		for (i = 0; i < mbp->header.mbp_size - 1; i++)
+			printk(BIOS_INFO, "ME MBP: %04x: 0x%08x\n", i, mbp->data[i]);
 	}
 
-	#define ASSIGN_FIELD_PTR(field_,val_) \
-		{ \
-		mbp_data->field_ = (typeof(mbp_data->field_))(void *)val_; \
+#define ASSIGN_FIELD_PTR(field_, val_) \
+	{ \
+		mbp_data->field_ = (typeof(mbp_data->field_))val_; \
 		break; \
-		}
-	/* Setup the pointers in the me_bios_payload structure. */
+	}
+
+	/*
+	 * Set up the pointers in the me_bios_payload structure.
+	 * We must NOT free `mbp` afterwards, because the memory
+	 * is still referenced by the pointers in `mbp_data`!
+	 */
 	for (i = 0; i < mbp->header.mbp_size - 1;) {
 		struct mbp_item_header *item = (void *)&mbp->data[i];
+		void *item_data = &mbp->data[i + 1];
 
 		switch (MBP_MAKE_IDENT(item->app_id, item->item_id)) {
 		case MBP_IDENT(KERNEL, FW_VER):
-			ASSIGN_FIELD_PTR(fw_version_name, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(fw_version_name, item_data);
 
 		case MBP_IDENT(ICC, PROFILE):
-			ASSIGN_FIELD_PTR(icc_profile, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(icc_profile, item_data);
 
 		case MBP_IDENT(INTEL_AT, STATE):
-			ASSIGN_FIELD_PTR(at_state, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(at_state, item_data);
 
 		case MBP_IDENT(KERNEL, FW_CAP):
-			ASSIGN_FIELD_PTR(fw_capabilities, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(fw_capabilities, item_data);
 
 		case MBP_IDENT(KERNEL, ROM_BIST):
-			ASSIGN_FIELD_PTR(rom_bist_data, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(rom_bist_data, item_data);
 
 		case MBP_IDENT(KERNEL, PLAT_KEY):
-			ASSIGN_FIELD_PTR(platform_key, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(platform_key, item_data);
 
 		case MBP_IDENT(KERNEL, FW_TYPE):
-			ASSIGN_FIELD_PTR(fw_plat_type, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(fw_plat_type, item_data);
 
 		case MBP_IDENT(KERNEL, MFS_FAILURE):
-			ASSIGN_FIELD_PTR(mfsintegrity, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(mfsintegrity, item_data);
 
 		case MBP_IDENT(KERNEL, PLAT_TIME):
-			ASSIGN_FIELD_PTR(plat_time, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(plat_time, item_data);
 
 		case MBP_IDENT(NFC, SUPPORT_DATA):
-			ASSIGN_FIELD_PTR(nfc_data, &mbp->data[i+1]);
+			ASSIGN_FIELD_PTR(nfc_data, item_data);
 
 		default:
 			printk(BIOS_ERR, "ME MBP: unknown item 0x%x @ "
@@ -840,19 +960,15 @@ static int intel_me_read_mbp(struct me_bios_payload *mbp_data, struct device *de
 		}
 		i += item->length;
 	}
-	#undef ASSIGN_FIELD_PTR
+#undef ASSIGN_FIELD_PTR
 
-	return 0;
-
-mbp_failure:
-	intel_me_mbp_give_up(dev);
-	return -1;
+	return ret;
 }
 
 /* Check whether ME is present and do basic init */
 static void intel_me_init(struct device *dev)
 {
-	struct southbridge_intel_lynxpoint_config *config = dev->chip_info;
+	const pch_config_t *config = dev->chip_info;
 	enum me_bios_path path = intel_me_path(dev);
 	struct me_bios_payload mbp_data;
 
@@ -875,32 +991,68 @@ static void intel_me_init(struct device *dev)
 	if (intel_mei_setup(dev) < 0)
 		return;
 
-	if (intel_me_read_mbp(&mbp_data, dev))
+	/* Read ME MBP data */
+	int mbp_ret = intel_me_read_mbp(&mbp_data, dev);
+	if (mbp_ret < 0)
 		return;
-
-	if (CONFIG_DEFAULT_CONSOLE_LOGLEVEL >= BIOS_DEBUG) {
-		me_print_fw_version(mbp_data.fw_version_name);
-
-		if (CONFIG(DEBUG_INTEL_ME))
-			me_print_fwcaps(mbp_data.fw_capabilities);
-
-		if (mbp_data.plat_time) {
-			printk(BIOS_DEBUG, "ME: Wake Event to ME Reset:      %u ms\n",
-			       mbp_data.plat_time->wake_event_mrst_time_ms);
-			printk(BIOS_DEBUG, "ME: ME Reset to Platform Reset:  %u ms\n",
-			       mbp_data.plat_time->mrst_pltrst_time_ms);
-			printk(BIOS_DEBUG, "ME: Platform Reset to CPU Reset: %u ms\n",
-			       mbp_data.plat_time->pltrst_cpurst_time_ms);
-		}
-	}
+	intel_me_print_mbp(&mbp_data);
 
 	/* Set clock enables according to devicetree */
 	if (config && config->icc_clock_disable)
 		me_icc_set_clock_enables(config->icc_clock_disable);
 
 	/*
+	 * TODO: Unify ME finalisation between LPT and WPT. ME10 BWG
+	 * recommends sending the HMRFPO LOCK message prior to OpROM
+	 * execution, but we might want to skip sending that in case
+	 * one wants to send HMRFPO ENABLE afterwards.
+	 *
+	 * TODO: ME10 BWG states that neither HMRFPO LOCK nor END OF
+	 * POST MKHI messages should be sent when resuming from S3.
+	 */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+	/* Make sure ME is in a mode that expects EOP */
+	union me_hfs hfs = { .raw = pci_read_config32(dev, PCI_ME_HFS) };
+
+	/* Abort and leave device alone if not normal mode */
+	if (hfs.fpt_bad ||
+	    hfs.working_state != ME_HFS_CWS_NORMAL ||
+	    hfs.operation_mode != ME_HFS_MODE_NORMAL)
+		return;
+
+	if (mbp_ret) {
+		/*
+		 * MBP Cleared wait is skipped,
+		 * Do not expect ACK and reset when complete.
+		 */
+
+		/* Send HMRFPO Lock command, no response */
+		mkhi_hmrfpo_lock_noack();
+
+		/* Send END OF POST command, no response */
+		mkhi_end_of_post_noack();
+
+		/* Assert reset and interrupt */
+		union mei_csr csr = read_host_csr();
+		csr.interrupt_generate = 1;
+		csr.reset = 1;
+		write_host_csr(csr);
+	} else {
+		/*
+		 * MBP Cleared wait was not skipped
+		 */
+
+		/* Send HMRFPO LOCK command */
+		mkhi_hmrfpo_lock();
+
+		/* Send EOP command so ME stops accepting other commands */
+		mkhi_end_of_post();
+	}
+#else
+	/*
 	 * Leave the ME unlocked. It will be locked later.
 	 */
+#endif
 }
 
 static void intel_me_enable(struct device *dev)
@@ -926,6 +1078,7 @@ static const unsigned short pci_device_ids[] = {
 	PCI_DID_INTEL_LPT_H_MEI,
 	PCI_DID_INTEL_LPT_H_MEI_9,
 	PCI_DID_INTEL_LPT_LP_MEI,
+	PCI_DID_INTEL_WPT_LP_MEI,
 	0
 };
 

@@ -30,11 +30,28 @@ config BOARD_ASUS_H61M_CS
 	select NO_UART_ON_SUPERIO
 	select SUPERIO_NUVOTON_NCT6779D
 
+config BOARD_ASUS_P8H61_I_R2_0
+	select BOARD_ASUS_H61_SERIES
+	select BOARD_ROMSIZE_KB_8192
+	select HAVE_CMOS_DEFAULT
+	select HAVE_OPTION_TABLE
+	select NO_UART_ON_SUPERIO
+	select REALTEK_8168_RESET
+	select SUPERIO_ITE_IT8772F
+
 config BOARD_ASUS_P8H61_M_LX
 	select BOARD_ASUS_H61_SERIES
 	select BOARD_ROMSIZE_KB_4096
 	select HAVE_CMOS_DEFAULT
 	select HAVE_OPTION_TABLE
+	select REALTEK_8168_RESET
+	select RT8168_SET_LED_MODE
+	select SUPERIO_NUVOTON_COMMON_COM_A
+	select SUPERIO_NUVOTON_NCT6776
+
+config BOARD_ASUS_P8H61_M_LX2
+	select BOARD_ASUS_H61_SERIES
+	select BOARD_ROMSIZE_KB_4096
 	select REALTEK_8168_RESET
 	select RT8168_SET_LED_MODE
 	select SUPERIO_NUVOTON_COMMON_COM_A
@@ -87,19 +104,23 @@ config MAINBOARD_DIR
 config VARIANT_DIR
 	default "h61m-a_usb3"        if BOARD_ASUS_H61M_A_USB3
 	default "h61m-cs"            if BOARD_ASUS_H61M_CS
+	default "p8h61-i_r2_0"       if BOARD_ASUS_P8H61_I_R2_0
 	default "p8h61-m_lx"         if BOARD_ASUS_P8H61_M_LX
+	default "p8h61-m_lx2"        if BOARD_ASUS_P8H61_M_LX2
 	default "p8h61-m_lx3_r2_0"   if BOARD_ASUS_P8H61_M_LX3_R2_0
 	default "p8h61-m_pro"        if BOARD_ASUS_P8H61_M_PRO
 	default "p8h61-m_pro_cm6630" if BOARD_ASUS_P8H61_M_PRO_CM6630
 	default "p8h67-i_deluxe"     if BOARD_ASUS_P8H67_I_DELUXE
 
 config MAINBOARD_PART_NUMBER
-	default "H61M-CS"          if BOARD_ASUS_H61M_CS
-	default "P8H61-M LX"       if BOARD_ASUS_P8H61_M_LX
-	default "P8H61-M LX3 R2.0" if BOARD_ASUS_P8H61_M_LX3_R2_0
-	default "P8H61-M PRO"      if BOARD_ASUS_P8H61_M_PRO
+	default "H61M-CS"            if BOARD_ASUS_H61M_CS
+	default "P8H61-I R2.0"       if BOARD_ASUS_P8H61_I_R2_0
+	default "P8H61-M LX"         if BOARD_ASUS_P8H61_M_LX
+	default "P8H61-M LX2"        if BOARD_ASUS_P8H61_M_LX2
+	default "P8H61-M LX3 R2.0"   if BOARD_ASUS_P8H61_M_LX3_R2_0
+	default "P8H61-M PRO"        if BOARD_ASUS_P8H61_M_PRO
 	default "P8H61-M PRO CM6630" if BOARD_ASUS_P8H61_M_PRO_CM6630
-	default "P8H67-I DELUXE"   if BOARD_ASUS_P8H67_I_DELUXE
+	default "P8H67-I DELUXE"     if BOARD_ASUS_P8H67_I_DELUXE
 
 config OVERRIDE_DEVICETREE
 	default "variants/\$(CONFIG_VARIANT_DIR)/overridetree.cb"
@@ -121,6 +142,6 @@ config CBFS_SIZE
 config ME_CLEANER_ARGS
 	string
 	depends on USE_ME_CLEANER
-	default "-S --whitelist EFFS,FCRS" if BOARD_ASUS_P8H61_M_LX
+	default "-S --whitelist EFFS,FCRS" if BOARD_ASUS_P8H61_M_LX || BOARD_ASUS_P8H61_I_R2_0
 
 endif

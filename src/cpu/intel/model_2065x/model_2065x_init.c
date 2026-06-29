@@ -57,10 +57,15 @@ static void set_max_ratio(void)
 
 	perf_ctl.hi = 0;
 
-	/* Platform Info bits 15:8 give max ratio */
-	msr = rdmsr(MSR_PLATFORM_INFO);
-	perf_ctl.lo = msr.lo & 0xff00;
-	wrmsr(IA32_PERF_CTL, perf_ctl);
+	/* Check for configurable TDP option */
+	if (get_turbo_state() == TURBO_ENABLED) {
+		msr = rdmsr(MSR_TURBO_RATIO_LIMIT);
+		perf_ctl.lo = (msr.lo & 0xff) << 8;
+	} else {
+		/* Platform Info bits 15:8 give max ratio (no Turbo mode) */
+		msr = rdmsr(MSR_PLATFORM_INFO);
+		perf_ctl.lo = msr.lo & 0xff00;
+	}
 
 	printk(BIOS_DEBUG, "model_x065x: frequency set to %d\n",
 	       ((perf_ctl.lo >> 8) & 0xff) * IRONLAKE_BCLK);
@@ -68,20 +73,9 @@ static void set_max_ratio(void)
 
 static void model_2065x_init(struct device *cpu)
 {
-	char processor_name[49];
-
 	/* Clear out pending MCEs */
 	/* This should only be done on a cold boot */
 	mca_clear_status();
-
-	/* Print processor name */
-	fill_processor_name(processor_name);
-	printk(BIOS_INFO, "CPU: %s.\n", processor_name);
-	printk(BIOS_INFO, "CPU:lapic=%d, boot_cpu=%d\n", lapicid(),
-		boot_cpu());
-
-	/* Setup Page Attribute Tables (PAT) */
-	// TODO set up PAT
 
 	enable_lapic_tpr();
 
@@ -96,9 +90,6 @@ static void model_2065x_init(struct device *cpu)
 	/* Thermal throttle activation offset */
 	configure_thermal_target(cpu);
 
-	/* Set Max Ratio */
-	set_max_ratio();
-
 	/* Enable Turbo */
 	enable_turbo();
 }
@@ -106,6 +97,9 @@ static void model_2065x_init(struct device *cpu)
 /* MP initialization support. */
 static void pre_mp_init(void)
 {
+	const void *microcode_patch = intel_microcode_find();
+	intel_microcode_load_unlocked(microcode_patch);
+
 	/* Setup MTRRs based on physical address size. */
 	x86_setup_mtrrs_with_detect();
 	x86_mtrr_check();
@@ -126,9 +120,13 @@ static int get_cpu_count(void)
 	return num_threads;
 }
 
-static void get_microcode_info(const void **microcode, int *parallel)
+static void get_microcode_info(const void **microcode, size_t *size, int *parallel)
 {
-	*microcode = intel_microcode_find();
+	const struct microcode *microcode_file = intel_microcode_find();
+	if (microcode_file != NULL)
+		*size = get_microcode_size(microcode_file);
+
+	*microcode = microcode_file;
 	*parallel = !intel_ht_supported();
 }
 
@@ -144,6 +142,9 @@ static void per_cpu_smm_trigger(void)
 
 static void post_mp_init(void)
 {
+	/* Set Max Ratio. This has no effect until BIOS_RESET_CPL is set. */
+	set_max_ratio();
+
 	/* Now that all APs have been relocated as well as the BSP let SMIs
 	 * start flowing. */
 	global_smi_enable();

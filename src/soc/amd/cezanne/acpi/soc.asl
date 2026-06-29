@@ -21,7 +21,11 @@ Scope(\_SB) {
 
 	Scope(PCI0) {
 		#include <soc/amd/common/acpi/lpc.asl>
+
+		#include "pci.asl"
 	} /* End PCI0 scope */
+
+	#include "acp.asl"
 } /* End \_SB scope */
 
 #include <soc/amd/common/acpi/alib.asl>
@@ -39,7 +43,9 @@ Scope(\_SB) {
 /* Enable DPTC interface with AMD ALIB */
 External(\_SB.DPTC, MethodObj)
 
+#if CONFIG(CHROMEOS)
 #include "rtc_workaround.asl"
+#endif
 
 /*
  * Platform Notify

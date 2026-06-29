@@ -1,17 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include <commonlib/helpers.h>
 #include <console/console.h>
-#include <acpi/acpi.h>
-#include <delay.h>
 #include <cpu/intel/haswell/haswell.h>
+#include <delay.h>
+#include <drivers/intel/oc_mailbox/oc_mailbox.h>
 #include <device/device.h>
 #include <device/pci.h>
 #include <device/pci_ids.h>
 #include <device/pci_ops.h>
-#include <boot/tables.h>
 #include <security/intel/txt/txt_register.h>
-#include <southbridge/intel/lynxpoint/pch.h>
 #include <types.h>
 
 #include "chip.h"
@@ -146,14 +143,10 @@ struct map_entry {
 
 static void read_map_entry(struct device *dev, struct map_entry *entry, uint64_t *result)
 {
-	uint64_t value;
-	uint64_t mask;
-
 	/* All registers have a 1MiB granularity */
-	mask = ((1ULL << 20) - 1);
-	mask = ~mask;
+	const uint64_t mask = ~((1ULL << 20) - 1);
 
-	value = 0;
+	uint64_t value = 0;
 
 	if (entry->is_64_bit) {
 		value = pci_read_config32(dev, entry->reg + 4);
@@ -211,16 +204,14 @@ static struct map_entry memory_map[NUM_MAP_ENTRIES] = {
 
 static void mc_read_map_entries(struct device *dev, uint64_t *values)
 {
-	int i;
-	for (i = 0; i < NUM_MAP_ENTRIES; i++) {
+	for (int i = 0; i < NUM_MAP_ENTRIES; i++) {
 		read_map_entry(dev, &memory_map[i], &values[i]);
 	}
 }
 
 static void mc_report_map_entries(struct device *dev, uint64_t *values)
 {
-	int i;
-	for (i = 0; i < NUM_MAP_ENTRIES; i++) {
+	for (int i = 0; i < NUM_MAP_ENTRIES; i++) {
 		printk(BIOS_DEBUG, "MC MAP: %s: 0x%llx\n",
 		       memory_map[i].description, values[i]);
 	}
@@ -230,12 +221,11 @@ static void mc_report_map_entries(struct device *dev, uint64_t *values)
 
 static void mc_add_dram_resources(struct device *dev, int *resource_cnt)
 {
-	int index;
 	uint64_t mc_values[NUM_MAP_ENTRIES];
 
 	/* Read in the MAP registers and report their values */
-	mc_read_map_entries(dev, &mc_values[0]);
-	mc_report_map_entries(dev, &mc_values[0]);
+	mc_read_map_entries(dev, mc_values);
+	mc_report_map_entries(dev, mc_values);
 
 	/*
 	 * DMA Protected Range can be reserved below TSEG for PCODE patch
@@ -274,14 +264,13 @@ static void mc_add_dram_resources(struct device *dev, int *resource_cnt)
 	 *
 	 * The resource index starts low and should not meet or exceed PCI_BASE_ADDRESS_0.
 	 */
-	index = *resource_cnt;
+	int index = *resource_cnt;
 
 	/*
 	 * 0 - > 0xa0000: RAM
 	 * 0xa0000 - 0xbffff: Legacy VGA
 	 * 0xc0000 - 0xfffff: RAM
 	 */
-
 	ram_range(dev, index++, 0, 0xa0000);
 	mmio_from_to(dev, index++, 0xa0000, 0xc0000);
 	reserved_ram_from_to(dev, index++, 0xc0000, 1 * MiB);
@@ -464,6 +453,9 @@ static void northbridge_init(struct device *dev)
 
 	disable_devices();
 
+	/* Enable SA Clock Gating */
+	mchbar_setbits32(SAPMCTL, 1 << 0);
+
 	/*
 	 * Set bits 0 + 1 of BIOS_RESET_CPL to indicate to the CPU
 	 * that BIOS has initialized memory and power management.
@@ -474,6 +466,9 @@ static void northbridge_init(struct device *dev)
 	/* Configure turbo power limits 1ms after reset complete bit. */
 	mdelay(1);
 	set_power_limits(28);
+
+	/* Apply OC mailbox settings (e.g. undervolt) after power limits. */
+	program_oc_mailbox();
 }
 
 static void northbridge_final(struct device *dev)
@@ -532,13 +527,6 @@ static const struct pci_driver mc_driver_hsw __pci_driver = {
 	.ops     = &mc_ops,
 	.vendor  = PCI_VID_INTEL,
 	.devices = mc_pci_device_ids,
-};
-
-struct device_operations haswell_cpu_bus_ops = {
-	.read_resources   = noop_read_resources,
-	.set_resources    = noop_set_resources,
-	.init             = mp_cpu_bus_init,
-	.acpi_fill_ssdt   = generate_cpu_entries,
 };
 
 struct chip_operations northbridge_intel_haswell_ops = {

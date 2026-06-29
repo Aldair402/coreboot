@@ -7,11 +7,12 @@ config BOARD_STARLABS_LITE_SERIES
 	select DRIVERS_EFI_VARIABLE_STORE
 	select DRIVERS_OPTION_CFR_ENABLED
 	select DRIVERS_I2C_HID
+	select FSP_COMPRESS_FSP_M_LZMA
+	select FSP_COMPRESS_FSP_S_LZMA
 	select HAVE_ACPI_RESUME
 	select HAVE_ACPI_TABLES
-	select HAVE_CMOS_DEFAULT
-	select HAVE_OPTION_TABLE
 	select HAVE_INTEL_PTT
+	select VALIDATE_INTEL_DESCRIPTOR
 	select INTEL_GMA_HAVE_VBT
 	select INTEL_LPSS_UART_FOR_CONSOLE
 	select CRB_TPM
@@ -62,7 +63,11 @@ config EC_VARIANT_DIR
 
 config FMDFILE
 	default "src/mainboard/starlabs/lite/vboot.fmd" if VBOOT
-	default "src/mainboard/starlabs/lite/board.fmd"
+	default "src/mainboard/\$(CONFIG_MAINBOARD_DIR)/variants/\$(CONFIG_VARIANT_DIR)/board.fmd"
+
+config IFWI_FITC_CONFIG_PROFILE
+	default "glk"  if BOARD_STARLABS_LITE_GLK
+	default "glkr" if BOARD_STARLABS_LITE_GLKR
 
 config MAINBOARD_DIR
 	default "starlabs/lite"
@@ -83,11 +88,7 @@ config MAINBOARD_SMBIOS_PRODUCT_NAME
 config POWER_STATE_DEFAULT_ON_AFTER_FAILURE
 	default n
 
-config TJ_MAX
-	int
-	default 100
-
-config PL4_WATTS
+config MB_STARLABS_PL4_WATTS
 	int
 	default 45
 
@@ -95,10 +96,6 @@ config TRACKPAD_INTERRUPT
 	hex
 	default 0x1 if BOARD_STARLABS_LITE_GLK
 	default 0x0 if BOARD_STARLABS_LITE_GLKR
-
-config EDK2_BOOTSPLASH_FILE
-	string
-	default "3rdparty/blobs/mainboard/starlabs/Logo.bmp"
 
 config UART_FOR_CONSOLE
 	default 2

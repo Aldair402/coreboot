@@ -69,6 +69,7 @@ ramstage-y += ../common/early_init.c
 ramstage-y += ../common/emi.c
 ramstage-y += gpueb.c
 ramstage-y += l2c_ops.c
+ramstage-y += ../common/low_battery.c
 ramstage-y += ../common/mcu.c mcupm.c
 ramstage-y += ../common/mmu_operations.c
 ramstage-y += ../common/mtk_mipi_dphy.c mtk_mipi_dphy.c
@@ -89,7 +90,6 @@ ramstage-y += ../common/pmif_clk.c pmif_clk.c
 ramstage-y += ../common/pmif.c pmif_init.c
 ramstage-y += ../common/pmif_spmi_v2.c pmif_spmi.c
 ramstage-y += ../common/rtc.c ../common/rtc_osc_init.c
-ramstage-y += ../common/tps65132s.c
 ramstage-y += ../common/usb.c usb.c
 
 BL31_MAKEARGS += PLAT=mt8196

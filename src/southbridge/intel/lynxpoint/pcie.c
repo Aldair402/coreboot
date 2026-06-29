@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <commonlib/helpers.h>
 #include <console/console.h>
+#include <cpu/intel/haswell/haswell.h>
+#include <delay.h>
 #include <device/device.h>
 #include <device/pci.h>
 #include <device/pciexp.h>
@@ -131,6 +133,29 @@ static void update_num_ports(void)
 	       rpc.num_ports);
 }
 
+static u16 get_port_grant(u32 strpfusecfg)
+{
+	switch ((strpfusecfg >> 14) & 0x3) {
+	case 1: /* 2+1+1 */
+	case 3: /* 4 */
+		return 0x02;
+	case 2: /* 2+2 */
+		return 0x22;
+	case 0: /* 1+1+1+1 */
+	default:
+		return 0x00;
+	}
+}
+
+static void set_iosf_port_grant_count(void)
+{
+	u16 reg16 = get_port_grant(rpc.strpfusecfg1) << 0;
+	if (!pch_is_lp())
+		reg16 |= get_port_grant(rpc.strpfusecfg2) << 8;
+
+	RCBA16(0x103c) = reg16;
+}
+
 static void root_port_init_config(struct device *dev)
 {
 	int rp;
@@ -141,11 +166,17 @@ static void root_port_init_config(struct device *dev)
 		rpc.num_ports = max_root_ports();
 		rpc.gbe_port = -1;
 
+		/* TODO: This is part of Power Management Programming in LPT RC */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+		/* RP0 f5[3:0] = 0101b */
+		pci_update_config8(dev, 0xf5, ~0xf, 0x5);
+#endif
+
 		rpc.pin_ownership = pci_read_config32(dev, 0x410);
 		root_port_config_update_gbe_port();
 
 		if (dev->chip_info != NULL) {
-			struct southbridge_intel_lynxpoint_config *config;
+			const pch_config_t *config;
 
 			config = dev->chip_info;
 			rpc.coalesce = config->pcie_port_coalesce;
@@ -180,6 +211,24 @@ static void root_port_init_config(struct device *dev)
 	default:
 		break;
 	}
+
+	/* FIXME: This is conditional on LPT */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+	pci_write_config32(dev, 0x418, 0x02000430);
+
+	if (root_port_is_first(dev)) {
+		/*
+		 * Set RP0 PCICFG E2h[5:4] = 11b and E1h[6] = 1
+		 * before configuring ASPM
+		 */
+		u32 data = 0;
+		u8 resp;
+		u8 id = 0xe0 + (u8)(RCBA32(RPFN) & 0x07);
+		pch_iobp_exec(0xe00000e0, IOBP_PCICFG_READ, id, &data, &resp);
+		data |= 0x30 << 16 | 0x40 << 8;
+		pch_iobp_exec(0xe00000e0, IOBP_PCICFG_WRITE, id, &data, &resp);
+	}
+#endif
 
 	/* Cache pci device. */
 	rpc.ports[rp - 1] = dev;
@@ -279,17 +328,43 @@ static void pcie_enable_clock_gating(void)
 		}
 
 		/* Update PECR1 register. */
+		/* FIXME: Figure out correct value for LPT */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+		pci_or_config8(dev, 0xe8, 3);
+#else
 		pci_or_config8(dev, 0xe8, 1);
+#endif
 
-		pci_or_config8(dev, 0x324, 1 << 5);
+		if (cpu_is_broadwell()) {
+			pci_or_config32(dev, 0x324, (1 << 5) | (1 << 14));
+		} else {
+			pci_or_config32(dev, 0x324, 1 << 5);
+		}
 
 		/* Per-Port CLKREQ# handling. */
-		if (is_lp && gpio_is_native(18 + rp - 1))
+		if (is_lp && gpio_is_native(18 + rp - 1)) {
+			/* FIXME: Confirm programming sequence (seems conditional?) */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+			/*
+			 * In addition to D28Fx PCICFG 420h[30:29] = 11b,
+			 * set 420h[17] = 0b and 420[0] = 1b for L1 SubState.
+			 */
+			pci_update_config32(dev, 0x420, ~(1 << 17), 3 << 29 | 1);
+#else
 			pci_or_config32(dev, 0x420, 3 << 29);
+#endif
+		}
 
 		/* Configure shared resource clock gating. */
 		if (rp == 1 || rp == 5 || (rp == 6 && is_lp))
 			pci_or_config8(dev, 0xe1, 0x3c);
+
+		/* FIXME: Should only be set for enabled CLKREQ# pins */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+		/* CLKREQ# VR Idle Enable */
+		if (is_lp)
+			RCBA32_OR(0x2b1c, 1 << (16 + i));
+#endif
 	}
 
 	if (!enabled_ports && is_lp && rpc.ports[0])
@@ -306,6 +381,9 @@ static void root_port_commit_config(void)
 
 	/* Perform clock gating configuration. */
 	pcie_enable_clock_gating();
+
+	/* 8.13 IOSF Port Configuration and Grant Count Programming */
+	set_iosf_port_grant_count();
 
 	for (i = 0; i < rpc.num_ports; i++) {
 		struct device *dev;
@@ -325,6 +403,26 @@ static void root_port_commit_config(void)
 		/* Ensure memory, io, and bus master are all disabled */
 		pci_and_config16(dev, PCI_COMMAND,
 				~(PCI_COMMAND_MASTER | PCI_COMMAND_MEMORY | PCI_COMMAND_IO));
+
+		/* 8.2 Configuration of PCI Express Root Ports */
+		/* TODO: This should not be done if a card is detected */
+		pci_or_config32(dev, 0x338, 1 << 26);
+
+		/* TODO: BWG specifies 50 ms timeout */
+		int n = 0;
+		do {
+			u32 reg32 = pci_read_config32(dev, 0x328);
+			n++;
+			if (((reg32 & 0xff000000) == 0x01000000) || (n > 50))
+				break;
+			udelay(100);
+		} while (1);
+
+		if (n > 50)
+			printk(BIOS_DEBUG, "%s: Timeout waiting for 328h\n",
+				dev_path(dev));
+
+		pci_or_config32(dev, 0x408, 1 << 27);
 
 		/* Disable this device if possible */
 		pch_disable_devfn(dev);
@@ -499,7 +597,7 @@ static void pcie_add_0x0202000_iobp(u32 reg)
 
 static void pch_pcie_early(struct device *dev)
 {
-	struct southbridge_intel_lynxpoint_config *config = dev->chip_info;
+	const pch_config_t *config = dev->chip_info;
 	int do_aspm = 0;
 	int rp = root_port_number(dev);
 	int is_lp = pch_is_lp();
@@ -657,7 +755,12 @@ static void pch_pcie_early(struct device *dev)
 	/* Set Common Clock Exit Latency in MPC register. */
 	pci_update_config32(dev, 0xd8, ~(0x7 << 15), (0x3 << 15));
 
+	/* TODO: Figure out why this value is different */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+	pci_update_config32(dev, 0x33c, ~0x00ffffff, 0x854d74);
+#else
 	pci_update_config32(dev, 0x33c, ~0x00ffffff, 0x854c74);
+#endif
 
 	/* Set Invalid Receive Range Check Enable in MPC register. */
 	pci_or_config32(dev, 0xd8, 1 << 25);
@@ -740,6 +843,17 @@ static void pch_pcie_enable(struct device *dev)
 		root_port_commit_config();
 }
 
+static void pcie_get_ltr_max_latencies(u16 *max_snoop, u16 *max_nosnoop)
+{
+	*max_snoop = PCIE_LTR_MAX_SNOOP_LATENCY_3146US;
+	*max_nosnoop = PCIE_LTR_MAX_NO_SNOOP_LATENCY_3146US;
+}
+
+static struct pci_operations pcie_ops_with_ltr = {
+	.set_subsystem = pci_dev_set_subsystem,
+	.get_ltr_max_latencies = pcie_get_ltr_max_latencies,
+};
+
 static struct device_operations device_ops = {
 	.read_resources		= pci_bus_read_resources,
 	.set_resources		= pci_dev_set_resources,
@@ -747,7 +861,7 @@ static struct device_operations device_ops = {
 	.init			= pch_pcie_init,
 	.enable			= pch_pcie_enable,
 	.scan_bus		= pciexp_scan_bridge,
-	.ops_pci		= &pci_dev_ops_pci,
+	.ops_pci		= &pcie_ops_with_ltr,
 };
 
 static const unsigned short pci_device_ids[] = {
@@ -773,6 +887,12 @@ static const unsigned short pci_device_ids[] = {
 	PCI_DID_INTEL_LPT_LP_PCIE_RP4,
 	PCI_DID_INTEL_LPT_LP_PCIE_RP5,
 	PCI_DID_INTEL_LPT_LP_PCIE_RP6,
+	PCI_DID_INTEL_WPT_LP_PCIE_RP1,
+	PCI_DID_INTEL_WPT_LP_PCIE_RP2,
+	PCI_DID_INTEL_WPT_LP_PCIE_RP3,
+	PCI_DID_INTEL_WPT_LP_PCIE_RP4,
+	PCI_DID_INTEL_WPT_LP_PCIE_RP5,
+	PCI_DID_INTEL_WPT_LP_PCIE_RP6,
 	0
 };
 

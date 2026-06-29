@@ -495,6 +495,15 @@ static bool get_usb_typec_polarity(const struct dwc3_controller_config *config)
 	return (misc_status & CCOUT_INVERT_POLARITY) == CCOUT_INVERT_POLARITY;
 }
 
+/*
+ * Configures OTG buck for host mode
+ * @config: Controller configuration containing SMB slave address
+ */
+static void usb_configure_otg_buck(const struct dwc3_controller_config *config)
+{
+	spmi_write8(SPMI_ADDR(config->smb_slave_addr, SCHG_DCDC_OTG_CFG), OTG_BUCK_CFG);
+}
+
 /* Initialization of DWC3 Core and PHY */
 static void setup_usb_host(struct usb_dwc3_cfg *dwc3)
 {
@@ -587,9 +596,8 @@ static void setup_usb_host(struct usb_dwc3_cfg *dwc3)
 		printk(BIOS_ERR, "SS0 QMP PHY initialization failed\n");
 		high_speed_only_primary = true;
 	}
-	/* Enable VBUS for C0 */
-	enable_vbus_ss(&prim_config);
-	udelay(50);
+	/* Configure OTG buck */
+	usb_configure_otg_buck(&prim_config);
 	usb_typec_status_check(&prim_config);
 	mainboard_usb_typec_configure(0, polarity_prim);
 
@@ -618,9 +626,8 @@ static void setup_usb_host(struct usb_dwc3_cfg *dwc3)
 		printk(BIOS_ERR, "SS1 QMP PHY initialization failed\n");
 		high_speed_only_secondary = true;
 	}
-	/* Enable VBUS for C1 */
-	enable_vbus_ss(&sec_config);
-	udelay(50);
+	/* Configure OTG buck */
+	usb_configure_otg_buck(&sec_config);
 	usb_typec_status_check(&sec_config);
 	mainboard_usb_typec_configure(1, polarity_sec);
 
@@ -669,52 +676,6 @@ void usb_update_refclk_for_core(u32 core_num, bool enable)
 	default:
 		/* No clkref */
 		break;
-	}
-}
-
-/*
- * enable_vbus_ss - Enables VBUS SuperSpeed for specified USB core
- * @config: Controller configuration containing SMB slave address
- */
-void enable_vbus_ss(const struct dwc3_controller_config *config)
-{
-	u8 slave = config->smb_slave_addr;
-	u8 misc_status, otg_status = 0, otg_state = 0;
-	struct stopwatch sw;
-
-	printk(BIOS_INFO, "Enabling %s VBUS SuperSpeed\n", config->name);
-
-	/* Configure SDCDC CFG7 register before enabling OTG */
-	spmi_write8(SPMI_ADDR(slave, SCHG_DCDC_ENG_SDCDC_CFG7),
-		    SCHG_DCDC_ENG_SDCDC_GM_CLOOP_PD_OTG_BUCK_MASK);
-
-	spmi_write8(SPMI_ADDR(slave, SCHG_DCDC_OTG_CFG), 0x20);
-	spmi_write8(SPMI_ADDR(slave, SCHG_DCDC_CMD_OTG), 0x1);
-
-	/* Check Type-C mode */
-	misc_status = spmi_read8(SPMI_ADDR(slave, SCHG_TYPE_C_TYPE_C_MISC_STATUS));
-
-	/* Check SNK_SRC_MODE bit (bit 6): 0 = SNK, 1 = SRC */
-	if (misc_status & TYPEC_SNK_SRC_MODE) {
-		/* In SRC mode, poll OTG status until enabled */
-		stopwatch_init_msecs_expire(&sw, OTG_STATUS_TIMEOUT_MS);
-		while (!stopwatch_expired(&sw)) {
-			otg_status = spmi_read8(SPMI_ADDR(slave, SCHG_DCDC_OTG_STATUS));
-			otg_state = otg_status & OTG_STATE_MASK;
-
-			if (otg_state == OTG_STATE_ENABLED) {
-				printk(BIOS_INFO, "%s in SRC mode - OTG Status: 0x%02x, State: 0x%02x (OTG Enabled)\n",
-				       config->name, otg_status, otg_state);
-				return;
-			}
-			mdelay(OTG_STATUS_POLL_DELAY_MS);
-		}
-
-		/* Timeout - log final state */
-		printk(BIOS_INFO, "%s in SRC mode - OTG Status: 0x%02x, State: 0x%02x - Timeout after %d ms\n",
-		       config->name, otg_status, otg_state, OTG_STATUS_TIMEOUT_MS);
-	} else {
-		printk(BIOS_INFO, "%s in SNK mode - skipping OTG status read\n", config->name);
 	}
 }
 

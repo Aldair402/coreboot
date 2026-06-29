@@ -58,6 +58,25 @@ static inline bool fw_config_is_provisioned(void)
 	return fw_config_get() != UNDEFINED_FW_CONFIG;
 }
 
+/**
+ * fw_config_get_mainboard_override() - Allow mainboard to override fw_config.
+ * @fw_config: Pointer to the current fw_config value to modify.
+ */
+void fw_config_get_mainboard_override(uint64_t *fw_config);
+
+/**
+ * fw_config_probe_mainboard_override() - Mainboard hook to override specific probes
+ * @match: Structure containing field and option to probe
+ * @result: Output parameter - set to the probe result if this probe was handled
+ *
+ * Return: %true if this probe was handled, %false otherwise
+ *
+ * Mainboards can override this function to handle specific fw_config probes
+ * (e.g., based on CFR/CMOS options). If a probe is handled, return %true and
+ * set *result to the desired probe result. If not handled, return %false and
+ * the standard fw_config logic will be used.
+ */
+bool fw_config_probe_mainboard_override(const struct fw_config *match, bool *result);
 
 #if CONFIG(FW_CONFIG)
 
@@ -70,6 +89,16 @@ static inline bool fw_config_is_provisioned(void)
  * as error value for the case.
  */
 uint64_t fw_config_get_field(const struct fw_config_field *field);
+
+/**
+ * fw_config_value_set_field() - Update a field within a raw fw_config value.
+ * @fw_config: Pointer to the raw fw_config value to modify.
+ * @field: The field to set.
+ * @value: The new value for the field.
+ */
+void fw_config_value_set_field(uint64_t *fw_config,
+			       const struct fw_config_field *field,
+			       uint64_t value);
 
 /**
  * fw_config_probe() - Check if field and option matches.
@@ -105,6 +134,12 @@ const struct fw_config *fw_config_get_found(uint64_t field_mask);
 bool fw_config_probe_dev(const struct device *dev, const struct fw_config **matching_probe);
 
 #else
+
+static inline void fw_config_value_set_field(uint64_t *fw_config,
+					     const struct fw_config_field *field,
+					     uint64_t value)
+{
+}
 
 static inline bool fw_config_probe(const struct fw_config *match)
 {

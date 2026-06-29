@@ -24,6 +24,20 @@
 #define GPIO_ALT_GPI_SMI_STS	0x50
 #define GPIO_ALT_GPI_SMI_EN	0x54
 
+/* TODO: Deduplicate */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+uint16_t get_gpiobase(void)
+{
+	return DEFAULT_GPIOBASE;
+}
+
+/* STM Support */
+uint16_t get_pmbase(void)
+{
+	return DEFAULT_PMBASE;
+}
+#endif
+
 /* Print status bits with descriptive names */
 static void print_status_bits(u32 status, const char *bit_names[])
 {
@@ -297,11 +311,12 @@ void enable_alt_smi(u32 mask)
  * TCO
  */
 
-/* Clear TCO status and return events that are active */
+/* Clear TCO status and return events that are enabled and active */
 static u32 reset_tco_status(void)
 {
 	u32 tcobase = get_pmbase() + 0x60;
 	u32 tco_sts = inl(tcobase + 0x04);
+	u32 tco_en = inl(get_pmbase() + 0x68);
 
 	/* Don't clear BOOT_STS before SECOND_TO_STS */
 	outl(tco_sts & ~(1 << 18), tcobase + 0x04);
@@ -310,7 +325,7 @@ static u32 reset_tco_status(void)
 	if (tco_sts & (1 << 18))
 		outl(tco_sts & (1 << 18), tcobase + 0x04);
 
-	return tco_sts;
+	return tco_sts & tco_en;
 }
 
 /* Print TCO status bits */

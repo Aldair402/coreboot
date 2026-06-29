@@ -131,10 +131,13 @@ static inline bool cbfs_lz4_enabled(void)
 	if (fspm_env() && CONFIG(FSP_COMPRESS_FSP_M_LZ4))
 		return true;
 
-	if ((ENV_BOOTBLOCK || ENV_SEPARATE_VERSTAGE) && !CONFIG(COMPRESS_PRERAM_STAGES))
-		return false;
+	if (ENV_ROMSTAGE_OR_BEFORE && CONFIG(COMPRESS_PRERAM_STAGES))
+		return true;
 
 	if (ENV_SMM)
+		return false;
+
+	if (ENV_RAMSTAGE_LOADER && !CONFIG(COMPRESS_RAMSTAGE_LZ4))
 		return false;
 
 	return true;
@@ -157,6 +160,8 @@ static inline bool cbfs_lzma_enabled(void)
 
 static inline bool cbfs_zstd_enabled(void)
 {
+	if (fspm_env() && CONFIG(FSP_COMPRESS_FSP_M_ZSTD))
+		return true;
 	if (ENV_PAYLOAD_LOADER && CONFIG(COMPRESSED_PAYLOAD_ZSTD))
 		return true;
 	if (ENV_RAMSTAGE_LOADER && CONFIG(COMPRESS_RAMSTAGE_ZSTD))
@@ -173,12 +178,7 @@ static bool cbfs_file_hash_mismatch(const void *buffer, size_t size,
 
 	const struct vb2_hash *hash = NULL;
 
-	/*
-	 * Skipping this block in SMM because vboot library isn't linked to SMM stage.  This is
-	 * an issue only if using a CMOS options backend, then SMM refers to an option and tries
-	 * to verify cmos.layout here.
-	 */
-	if (CONFIG(CBFS_VERIFICATION) && !ENV_SMM && !skip_verification) {
+	if (CONFIG(CBFS_VERIFICATION) && !skip_verification) {
 		hash = cbfs_file_hash(mdata);
 		if (!hash) {
 			ERROR("'%s' does not have a file hash!\n", mdata->h.filename);
@@ -512,6 +512,24 @@ static void *do_alloc(union cbfs_mdata *mdata, struct region_device *rdev,
 	return loc;
 }
 
+static enum cb_err check_or_query_type(const union cbfs_mdata *mdata, enum cbfs_type *type)
+{
+	if (type == NULL)
+		return CB_SUCCESS;
+
+	const enum cbfs_type real_type = be32toh(mdata->h.type);
+	if (*type == CBFS_TYPE_QUERY) {
+		*type = real_type;
+		return CB_SUCCESS;
+	}
+
+	if (*type == real_type)
+		return CB_SUCCESS;
+
+	ERROR("'%s' type mismatch (is %u, expected %u)\n", mdata->h.filename, real_type, *type);
+	return CB_ERR;
+}
+
 void *_cbfs_alloc(const char *name, cbfs_allocator_t allocator, void *arg,
 		  size_t *size_out, bool force_ro, enum cbfs_type *type)
 {
@@ -525,16 +543,8 @@ void *_cbfs_alloc(const char *name, cbfs_allocator_t allocator, void *arg,
 	if (_cbfs_boot_lookup(name, force_ro, &mdata, &rdev))
 		return NULL;
 
-	if (type) {
-		const enum cbfs_type real_type = be32toh(mdata.h.type);
-		if (*type == CBFS_TYPE_QUERY)
-			*type = real_type;
-		else if (*type != real_type) {
-			ERROR("'%s' type mismatch (is %u, expected %u)\n",
-			      mdata.h.filename, real_type, *type);
-			return NULL;
-		}
-	}
+	if (check_or_query_type(&mdata, type) != CB_SUCCESS)
+		return NULL;
 
 	/* Update the rdev with the preload content */
 	if (!force_ro && get_preload_rdev(&rdev, name) == CB_SUCCESS)
@@ -568,16 +578,8 @@ void *_cbfs_unverified_area_alloc(const char *area, const char *name,
 		return NULL;
 	}
 
-	if (type) {
-		const enum cbfs_type real_type = be32toh(mdata.h.type);
-		if (*type == CBFS_TYPE_QUERY)
-			*type = real_type;
-		else if (*type != real_type) {
-			ERROR("'%s' type mismatch (is %u, expected %u)\n",
-			      mdata.h.filename, real_type, *type);
-			return NULL;
-		}
-	}
+	if (check_or_query_type(&mdata, type) != CB_SUCCESS)
+		return NULL;
 
 	if (rdev_chain(&file_rdev, &area_rdev, data_offset, be32toh(mdata.h.len)))
 		return NULL;

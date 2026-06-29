@@ -26,25 +26,33 @@ static inline size_t mca_report_size_reqd(int used_registers_per_bank)
 	size += cper_ia32x64_check_sz();
 
 	/* Context of MCG_CAP, MCG_STAT, MCG_CTL */
-	size += cper_ia32x64_ctx_sz_bytype(CPER_IA32X64_CTX_MSR, 3);
+	size += cper_ia32x64_ctx_sz_bytype(CPER_IA32X64_CTX_MSR, 3 * sizeof(msr_t));
 
 	/* Context of CTL, STATUS, ADDR, MISC0, CONFIG, IPID, SYND, RESERVED, DESTAT, DEADDR,
 	   MISC1, MISC2, MISC3, MISC4, SYND0, SYND1 */
-	size += cper_ia32x64_ctx_sz_bytype(CPER_IA32X64_CTX_MSR, used_registers_per_bank);
+	size += cper_ia32x64_ctx_sz_bytype(CPER_IA32X64_CTX_MSR, used_registers_per_bank * sizeof(msr_t));
 
 	/* Context of CTL_MASK */
-	size += cper_ia32x64_ctx_sz_bytype(CPER_IA32X64_CTX_MSR, 1);
+	size += cper_ia32x64_ctx_sz_bytype(CPER_IA32X64_CTX_MSR, 1 * sizeof(msr_t));
 
 	return size;
 }
 
-/* Convert an error reported by an MCA bank into BERT information to be reported
- * by the OS.  The ACPI driver doesn't recognize/parse the IA32/X64 structure,
+static void fill_generic_entry(acpi_hest_generic_data_v300_t *entry,
+			       struct mca_bank_status *mci)
+{
+	entry->validation_bits |= ACPI_GENERROR_VALID_FRUID_TEXT;
+	entry->flags |= CPER_SEC_PRIMARY;
+	strcpy((char *)entry->fru_text, "ProcessorError");
+}
+
+/*
+ * The ACPI driver doesn't recognize/parse the IA32/X64 structure,
  * which is the best method to report MSR context.  As a result, add two
  * structures:  A "processor generic error" that is parsed, and an IA32/X64 one
  * to capture complete information.
  */
-void build_bert_mca_error(struct mca_bank_status *mci)
+static void bert_log_proc_error(struct mca_bank_status *mci)
 {
 	acpi_generic_error_status_t *status;
 	acpi_hest_generic_data_v300_t *gen_entry;
@@ -64,6 +72,9 @@ void build_bert_mca_error(struct mca_bank_status *mci)
 		goto failed;
 
 	gen_entry = acpi_hest_generic_data3(status);
+
+	fill_generic_entry(gen_entry, mci);
+
 	gen_sec = section_of_acpientry(gen_sec, gen_entry);
 
 	fill_generic_section(gen_sec, mci);
@@ -91,4 +102,13 @@ void build_bert_mca_error(struct mca_bank_status *mci)
 failed:
 	/* We're here because of a hardware error, don't break something else */
 	printk(BIOS_ERR, "Not enough room in BERT region for Machine Check error\n");
+}
+
+/* Convert an error reported by an MCA bank into BERT information to be reported
+ * by the OS.
+ */
+void build_bert_mca_error(struct mca_bank_status *mci)
+{
+	/* Currently only processor MCAs are reported */
+	bert_log_proc_error(mci);
 }

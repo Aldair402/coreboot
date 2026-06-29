@@ -31,6 +31,7 @@ enum DRAMC_PARAM_CONFIG {
 	DRAMC_CONFIG_EMCP		= 0x0001,
 	DRAMC_CONFIG_DVFS		= 0x0002,
 	DRAMC_CONFIG_FAST_K		= 0x0004,
+	DRAMC_CONFIG_HIGH_FREQ		= 0x0008,
 	/* Security configs */
 	DRAMC_CONFIG_SCRAMBLE		= 0x0100,
 };
@@ -109,6 +110,5 @@ const char *get_status_string(u16 status);
 void dump_param_header(const void *blob);
 int validate_dramc_param(const void *blob);
 int is_valid_dramc_param(const void *blob);
-int initialize_dramc_param(void *blob);
 
 #endif

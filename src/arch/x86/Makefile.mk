@@ -4,6 +4,12 @@ ifeq ($(CONFIG_POSTCAR_STAGE),y)
 $(eval $(call init_standard_toolchain,postcar))
 endif
 
+ifeq ($(CONFIG_ARCH_X86),y)
+ifneq ($(CONFIG_NO_SMM),y)
+$(eval $(call init_standard_toolchain,smm))
+endif
+endif
+
 ################################################################################
 # i386 specific tools
 NVRAMTOOL:=$(objutil)/nvramtool/nvramtool
@@ -170,9 +176,6 @@ romstage-libs ?=
 
 $(eval $(call link_stage,romstage))
 
-# Compiling crt0 with -g seems to trigger https://sourceware.org/bugzilla/show_bug.cgi?id=6428
-romstage-S-ccopts += -g0
-
 endif # CONFIG_ARCH_ROMSTAGE_X86_32 / CONFIG_ARCH_ROMSTAGE_X86_64
 
 ###############################################################################
@@ -223,6 +226,10 @@ $(CONFIG_CBFS_PREFIX)/postcar-compression := none
 ###############################################################################
 
 ifeq ($(CONFIG_ARCH_RAMSTAGE_X86_32)$(CONFIG_ARCH_RAMSTAGE_X86_64),y)
+
+# not adding a check-ramstage-overlap-regions here because x86 ramstage can automatically
+# relocate itself to a free area (its build as a rmodule). Therefore no ramstage segments can
+# overlap with other executables in RAM.
 
 ramstage-y += acpi.c
 ramstage-$(CONFIG_HAVE_ACPI_RESUME) += acpi_s3.c

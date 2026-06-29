@@ -7,11 +7,8 @@
 #define DEFAULT_GPIOBASE	0x0480
 #define DEFAULT_PMBASE		0x0500
 
+#include <southbridge/intel/common/lpc_def.h> /* IWYU pragma: export */
 #include <southbridge/intel/common/rcba.h> /* IWYU pragma: export */
-
-#define SPIBASE 0x3020
-#define SPIBAR16(x) RCBA16(SPIBASE + x)
-#define SPIBAR32(x) RCBA32(SPIBASE + x)
 
 #ifndef __ACPI__
 #include <device/device.h>
@@ -61,37 +58,8 @@ void ich7_setup_cir(void);
 
 #define ACPI_CNTL		0x44
 #define   ACPI_EN		(1 << 7)
-#define BIOS_CNTL		0xDC
-#define GPIO_BASE		0x48 /* LPC GPIO Base Address Register */
 #define GPIO_CNTL		0x4C /* LPC GPIO Control Register */
 #define   GPIO_EN		(1 << 4)
-
-#define PIRQA_ROUT		0x60
-#define PIRQB_ROUT		0x61
-#define PIRQC_ROUT		0x62
-#define PIRQD_ROUT		0x63
-#define PIRQE_ROUT		0x68
-#define PIRQF_ROUT		0x69
-#define PIRQG_ROUT		0x6A
-#define PIRQH_ROUT		0x6B
-
-#define LPC_IO_DEC		0x80 /* IO Decode Ranges Register */
-#define LPC_EN			0x82 /* LPC IF Enables Register */
-#define   CNF2_LPC_EN		(1 << 13) /* 0x4e/0x4f */
-#define   CNF1_LPC_EN		(1 << 12) /* 0x2e/0x2f */
-#define   MC_LPC_EN		(1 << 11) /* 0x62/0x66 */
-#define   KBC_LPC_EN		(1 << 10) /* 0x60/0x64 */
-#define   GAMEH_LPC_EN		(1 << 9)  /* 0x208/0x20f */
-#define   GAMEL_LPC_EN		(1 << 8)  /* 0x200/0x207 */
-#define   FDD_LPC_EN		(1 << 3)  /* LPC_IO_DEC[12] */
-#define   LPT_LPC_EN		(1 << 2)  /* LPC_IO_DEC[9:8] */
-#define   COMB_LPC_EN		(1 << 1)  /* LPC_IO_DEC[6:4] */
-#define   COMA_LPC_EN		(1 << 0)  /* LPC_IO_DEC[2:0] */
-
-#define GEN1_DEC		0x84
-#define GEN2_DEC		0x88
-#define GEN3_DEC		0x8c
-#define GEN4_DEC		0x90
 
 /* PCI Configuration Space (D31:F1): IDE */
 #define INTR_LN			0x3c
@@ -149,9 +117,6 @@ void ich7_setup_cir(void);
 #define HST_EN			(1 << 0)
 
 /* Southbridge IO BARs */
-
-#define GPIOBASE		0x48
-
 #define PMBASE		0x40
 
 #define VCH		0x0000	/* 32bit */
@@ -213,6 +178,9 @@ void ich7_setup_cir(void);
 #define IOTR3		0x1e98	/* 64bit */
 
 #define TCTL		0x3000	/*  8bit */
+
+#define SPIBAR_SPIS	0x3020	/* 16bit */
+#define SPIBAR_SPIC	0x3020	/* 16bit */
 
 #define D31IP		0x3100	/* 32bit */
 #define D30IP		0x3104	/* 32bit */

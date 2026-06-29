@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
-subdirs-y += gnat
-
 ifeq ($(CONFIG_UBSAN),y)
 ramstage-y += ubsan.c
 CFLAGS_ramstage += -fsanitize=undefined
@@ -145,14 +143,16 @@ ramstage-y += cbfs.c
 ramstage-y += lzma.c lzmadecode.c
 ramstage-y += stack.c
 ramstage-y += hexstrtobin.c
-ramstage-y += wrdd.c
 ramstage-$(CONFIG_CONSOLE_CBMEM) += cbmem_console.c
 ramstage-$(CONFIG_BMP_LOGO) += bmp_logo.c
 ramstage-$(CONFIG_BMP_LOGO) += render_bmp.c
+ramstage-$(CONFIG_FRAMEBUFFER_SPLASH_TEXT) += render_text.c
+ramstage-$(CONFIG_FONT_GOOGLE_SANS_FLEX_MEDIUM_24X32) += fonts/font_table_google_sans_flex_medium_24x32.c
 ramstage-$(CONFIG_BOOTSPLASH) += bootsplash.c
 ramstage-$(CONFIG_BOOTSPLASH) += jpeg.c
 ramstage-$(CONFIG_COLLECT_TIMESTAMPS) += timestamp.c
 ramstage-$(CONFIG_COVERAGE) += libgcov.c
+ramstage-y += devtree_update.c
 ramstage-y += dp_aux.c
 ramstage-y += framebuffer_info.c
 ramstage-y += edid.c
@@ -372,17 +372,43 @@ romstage-y += spd_bin.c
 ifeq ($(CONFIG_HAVE_SPD_IN_CBFS),y)
 LIB_SPD_BIN = $(obj)/spd.bin
 
-LIB_SPD_DEPS = $(foreach f, $(SPD_SOURCES), src/mainboard/$(MAINBOARDDIR)/spd/$(f).spd.hex)
+SPD_SRC_DIR := src/mainboard/$(MAINBOARDDIR)/spd
+SPD_OBJ_DIR := $(obj)/spd
+SPD_GEN_TOOL := util/spd_tools/bin/spd_gen
+
+SPD_GEN_MEM_TECH ?=
+SPD_GEN_SET ?= 0
+
+# Some boards set SPD_SOURCES to the sentinel value "placeholder" to request
+# a minimal spd.bin without any dependencies.
+SPD_SOURCES_IS_PLACEHOLDER = \
+	$(if $(filter placeholder,$(SPD_SOURCES)), \
+		$(if $(filter-out placeholder,$(SPD_SOURCES)),,y))
+
+define spd_hex_dep
+$(if $(wildcard $(SPD_SRC_DIR)/$(1).spd.hex),$(SPD_SRC_DIR)/$(1).spd.hex,$(SPD_OBJ_DIR)/$(1).spd.hex)
+endef
+
+LIB_SPD_DEPS = $(foreach f, $(SPD_SOURCES), $(call spd_hex_dep,$(f)))
+
+$(SPD_GEN_TOOL):
+	$(MAKE) -C util/spd_tools bin/spd_gen
+
+$(SPD_OBJ_DIR)/%.spd.hex: $(SPD_SRC_DIR)/%.spd.json | $(SPD_GEN_TOOL)
+	test -n "$(SPD_GEN_MEM_TECH)" || \
+	    (echo "SPD_GEN_MEM_TECH must be set to generate SPD hex from JSON" >&2 && exit 1)
+	mkdir -p $(SPD_OBJ_DIR)
+	$(SPD_GEN_TOOL) --set $(SPD_GEN_SET) $< $(SPD_GEN_MEM_TECH) $@
 
 # Include spd ROM data
-$(LIB_SPD_BIN): $(LIB_SPD_DEPS)
+$(LIB_SPD_BIN): $$(if $$(SPD_SOURCES_IS_PLACEHOLDER),,$$(LIB_SPD_DEPS))
 	test -n "$(SPD_SOURCES)" || \
 	    (echo "HAVE_SPD_IN_CBFS is set but SPD_SOURCES is empty" && exit 1)
-	test -n "$(LIB_SPD_DEPS)" || \
-	    (echo "SPD_SOURCES is set but no SPD file was found" && exit 1)
 	if [ "$(SPD_SOURCES)" = "placeholder" ]; then \
 	    printf '\0'; \
 	else \
+	    test -n "$(LIB_SPD_DEPS)" || \
+	        (echo "SPD_SOURCES is set but no SPD file was found" && exit 1); \
 	    for f in $(LIB_SPD_DEPS); do \
 	        if [ ! -f $$f ]; then \
 	            echo "File not found: $$f" >&2; \
@@ -447,5 +473,18 @@ endif
 
 $(eval $(call add_bmp_logo_file_to_cbfs,CONFIG_PLATFORM_HAS_LOW_BATTERY_INDICATOR, \
 	      low_battery.bmp,CONFIG_PLATFORM_LOW_BATTERY_INDICATOR_LOGO_PATH))
+
+ifeq ($(CONFIG_PLATFORM_HAS_LOW_BATTERY_INDICATOR),y)
+$(eval $(call add_bmp_logo_file_to_cbfs,CONFIG_PLATFORM_HAS_SECONDARY_BOOT_INDICATOR_LOGO, \
+	      low_battery_alt.bmp,CONFIG_PLATFORM_LOW_BATTERY_INDICATOR_LOGO_SECONDARY_PATH))
+endif
+
 $(eval $(call add_bmp_logo_file_to_cbfs,CONFIG_SPLASH_SCREEN_FOOTER, \
 	      footer_logo.bmp,CONFIG_SPLASH_SCREEN_FOOTER_LOGO_PATH))
+$(eval $(call add_bmp_logo_file_to_cbfs,CONFIG_PLATFORM_HAS_OFF_MODE_CHARGING_INDICATOR, \
+	      off_mode_charging.bmp,CONFIG_PLATFORM_OFF_MODE_CHARGING_INDICATOR_LOGO_PATH))
+
+ifeq ($(CONFIG_PLATFORM_HAS_OFF_MODE_CHARGING_INDICATOR),y)
+$(eval $(call add_bmp_logo_file_to_cbfs,CONFIG_PLATFORM_HAS_SECONDARY_BOOT_INDICATOR_LOGO, \
+	      off_mode_charging_alt.bmp,CONFIG_PLATFORM_OFF_MODE_CHARGING_INDICATOR_LOGO_SECONDARY_PATH))
+endif

@@ -17,8 +17,6 @@
 #include <console/console.h>
 #include <smp/node.h>
 
-#define SMRR_SUPPORTED (1 << 11)
-
 #define  D_OPEN		(1 << 6)
 #define  D_CLS		(1 << 5)
 #define  D_LCK		(1 << 4)
@@ -28,20 +26,17 @@
 /* On model_6fx, model_1067x and model_106cx SMRR functions slightly
    differently. The MSR are at different location from the rest
    and need to be explicitly enabled in IA32_FEATURE_CONTROL MSR. */
-bool cpu_has_alternative_smrr(void)
+static inline bool cpu_has_alternative_smrr(void)
 {
+	if (CONFIG(CPU_INTEL_MODEL_1067X) ||
+	    CONFIG(CPU_INTEL_MODEL_106CX))
+		return true;
+	if (!CONFIG(CPU_INTEL_MODEL_6FX))
+		return false;
+	/* Runtime detection as model_6fx also supports Fam 6 Model 16h */
 	struct cpuinfo_x86 c;
 	get_fms(&c, cpuid_eax(1));
-	if (c.x86 != 6)
-		return false;
-	switch (c.x86_model) {
-	case 0xf:
-	case 0x17: /* core2 */
-	case 0x1c: /* Bonnell */
-		return true;
-	default:
-		return false;
-	}
+	return c.x86 == 6 && c.x86_model == 0xf;
 }
 
 static void write_smrr_alt(struct smm_relocation_params *relo_params)
@@ -183,7 +178,7 @@ void smm_relocation_handler(int cpu, uintptr_t curr_smbase,
 
 	/* Write EMRR and SMRR MSRs based on indicated support. */
 	mtrr_cap = rdmsr(MTRR_CAP_MSR);
-	if (!(mtrr_cap.lo & SMRR_SUPPORTED))
+	if (!(mtrr_cap.lo & MTRR_CAP_SMRR))
 		return;
 
 	if (cpu_has_alternative_smrr())

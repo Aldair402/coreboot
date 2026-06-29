@@ -384,12 +384,19 @@ static void set_max_ratio(void)
 	perf_ctl.hi = 0;
 
 	/* Check for configurable TDP option */
-	if (cpu_config_tdp_levels()) {
-		/* Set to nominal TDP ratio */
+	if (get_turbo_state() == TURBO_ENABLED) {
+		/*
+		 * It takes 1200msec after BIOS_RESET_CPL before the CPU starts using
+		 * the turbo.
+		 */
+		msr = rdmsr(MSR_TURBO_RATIO_LIMIT);
+		perf_ctl.lo = (msr.lo & 0xff) << 8;
+	} else if (cpu_config_tdp_levels()) {
+		/* Set to nominal TDP ratio (no Turbo mode) */
 		msr = rdmsr(MSR_CONFIG_TDP_NOMINAL);
 		perf_ctl.lo = (msr.lo & 0xff) << 8;
 	} else {
-		/* Platform Info bits 15:8 give max ratio */
+		/* Platform Info bits 15:8 give max ratio (no Turbo mode) */
 		msr = rdmsr(MSR_PLATFORM_INFO);
 		perf_ctl.lo = msr.lo & 0xff00;
 	}
@@ -421,17 +428,8 @@ unsigned int smbios_processor_external_clock(void)
 static void model_206ax_report(void)
 {
 	static const char *const mode[] = {"NOT ", ""};
-	char processor_name[49];
 	int vt, txt, aes;
-	uint32_t cpu_id, cpu_feature_flag;
-
-	/* Print processor name */
-	fill_processor_name(processor_name);
-	printk(BIOS_INFO, "CPU: %s.\n", processor_name);
-
-	/* CPUID and features */
-	cpu_id = cpu_get_cpuid();
-	printk(BIOS_INFO, "CPU: cpuid(1) 0x%x\n", cpu_id);
+	uint32_t cpu_feature_flag;
 
 	cpu_feature_flag = cpu_get_feature_flags_ecx();
 	aes = (cpu_feature_flag & CPUID_AES) ? 1 : 0;
@@ -447,12 +445,6 @@ static void model_206ax_init(struct device *cpu)
 	/* Clear out pending MCEs */
 	/* This should only be done on a cold boot */
 	mca_clear_status();
-
-	/* Print infos */
-	model_206ax_report();
-
-	/* Setup Page Attribute Tables (PAT) */
-	// TODO set up PAT
 
 	enable_lapic_tpr();
 
@@ -476,9 +468,6 @@ static void model_206ax_init(struct device *cpu)
 	/* Set energy policy */
 	set_energy_perf_bias(ENERGY_POLICY_NORMAL);
 
-	/* Set Max Ratio */
-	set_max_ratio();
-
 	/* Enable Turbo */
 	enable_turbo();
 }
@@ -486,6 +475,12 @@ static void model_206ax_init(struct device *cpu)
 /* MP initialization support. */
 static void pre_mp_init(void)
 {
+	/* Print infos */
+	model_206ax_report();
+
+	const void *microcode_patch = intel_microcode_find();
+	intel_microcode_load_unlocked(microcode_patch);
+
 	/* Setup MTRRs based on physical address size. */
 	x86_setup_mtrrs_with_detect();
 	x86_mtrr_check();
@@ -506,9 +501,13 @@ static int get_cpu_count(void)
 	return num_threads;
 }
 
-static void get_microcode_info(const void **microcode, int *parallel)
+static void get_microcode_info(const void **microcode, size_t *size, int *parallel)
 {
-	*microcode = intel_microcode_find();
+	const struct microcode *microcode_file = intel_microcode_find();
+	if (microcode_file != NULL)
+		*size = get_microcode_size(microcode_file);
+
+	*microcode = microcode_file;
 	*parallel = !intel_ht_supported();
 }
 
@@ -524,6 +523,9 @@ static void per_cpu_smm_trigger(void)
 
 static void post_mp_init(void)
 {
+	/* Set Max Ratio. This has no effect until BIOS_RESET_CPL is set. */
+	set_max_ratio();
+
 	/* Now that all APs have been relocated as well as the BSP let SMIs
 	 * start flowing. */
 	global_smi_enable();

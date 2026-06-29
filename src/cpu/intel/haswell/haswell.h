@@ -10,7 +10,8 @@
 /* CPU types without stepping */
 #define HASWELL_FAMILY_TRAD	0x306c0
 #define HASWELL_FAMILY_ULT	0x40650
-#define CRYSTALWELL_FAMILY	0x306c0
+#define CRYSTALWELL_FAMILY	0x40660
+#define BROADWELL_FAMILY_TRAD	0x40670
 #define BROADWELL_FAMILY_ULT	0x306d0
 
 /* Haswell CPUIDs */
@@ -26,7 +27,7 @@
 #define CPUID_CRYSTALWELL_C0	0x40661
 
 /* Broadwell CPUIDs */
-#define CPUID_BROADWELL_C0	0x40671
+#define CPUID_BROADWELL_G0	0x40671
 
 #define CPUID_BROADWELL_ULT_C0	0x306d2
 #define CPUID_BROADWELL_ULT_D0	0x306d3
@@ -83,6 +84,7 @@
 #define  PKG_POWER_LIMIT_CLAMP		(1 << 16)
 #define  PKG_POWER_LIMIT_TIME_SHIFT	17
 #define  PKG_POWER_LIMIT_TIME_MASK	0x7f
+#define  PKG_POWER_LIMIT_LOCK		(1U << 31)
 
 #define MSR_VR_CURRENT_CONFIG		0x601
 #define MSR_VR_MISC_CONFIG		0x603
@@ -102,10 +104,6 @@
 /* SMM save state MSRs */
 #define SMBASE_MSR			0xc20
 #define IEDBASE_MSR			0xc22
-
-/* MTRR_CAP_MSR bit definitions */
-#define SMRR_SUPPORTED			(1 << 11)
-#define PRMRR_SUPPORTED			(1 << 12)
 
 /* Intel suggested latency times in units of 1024ns. */
 #define C_STATE_LATENCY_CONTROL_0_LIMIT 0x42
@@ -162,9 +160,6 @@ enum {
 	NUM_C_STATES,
 };
 
-/* Lock MSRs */
-void intel_cpu_haswell_finalize_smm(void);
-
 /* Configure power limits for turbo mode */
 void set_power_limits(u8 power_limit_1_time);
 int cpu_config_tdp_levels(void);
@@ -175,6 +170,9 @@ void set_max_freq(void);
 int pcode_ready(void);
 u32 pcode_mailbox_read(u32 command);
 int pcode_mailbox_write(u32 command, u32 data);
+
+/* report_cpu_info.c */
+void report_cpu_info(void);
 
 /* CPU identification */
 static inline u32 cpu_family_model(void)
@@ -190,6 +188,29 @@ static inline u32 cpu_stepping(void)
 static inline bool haswell_is_ult(void)
 {
 	return CONFIG(INTEL_LYNXPOINT_LP);
+}
+
+static inline bool cpu_is_haswell(void)
+{
+	switch (cpu_family_model()) {
+	case HASWELL_FAMILY_TRAD:
+	case HASWELL_FAMILY_ULT:
+	case CRYSTALWELL_FAMILY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static inline bool cpu_is_broadwell(void)
+{
+	switch (cpu_family_model()) {
+	case BROADWELL_FAMILY_TRAD:
+	case BROADWELL_FAMILY_ULT:
+		return true;
+	default:
+		return false;
+	}
 }
 
 #endif

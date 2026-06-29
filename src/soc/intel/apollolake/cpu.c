@@ -162,6 +162,11 @@ static void pre_mp_init(void)
 		fsps_load();
 		return;
 	}
+
+	/* Make sure BSP is using the microcode from cbfs */
+	const struct microcode *microcode_patch = intel_microcode_find();
+	intel_microcode_load_unlocked(microcode_patch);
+
 	x86_setup_mtrrs_with_detect();
 	x86_mtrr_check();
 }
@@ -188,13 +193,14 @@ int get_cpu_count(void)
 	return num_virt_cores;
 }
 
-void get_microcode_info(const void **microcode, int *parallel)
+void get_microcode_info(const void **microcode, size_t *size, int *parallel)
 {
-	*microcode = intel_microcode_find();
-	*parallel = 1;
+	const struct microcode *microcode_file = intel_microcode_find();
+	if (microcode_file != NULL)
+		*size = get_microcode_size(microcode_file);
 
-	/* Make sure BSP is using the microcode from cbfs */
-	intel_microcode_load_unlocked(*microcode);
+	*microcode = microcode_file;
+	*parallel = 1;
 }
 #endif
 

@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only OR MIT */
 
+#include <baseboard/gpio.h>
+#include <baseboard/panel.h>
+#include <baseboard/storage.h>
 #include <boot/coreboot_tables.h>
 #include <bootmode.h>
 #include <commonlib/coreboot_tables.h>
@@ -19,10 +22,7 @@
 #include <soc/spm_common.h>
 #include <soc/storage.h>
 #include <soc/usb.h>
-
-#include "gpio.h"
-#include "panel.h"
-#include "storage.h"
+#include <vendorcode/google/chromeos/chromeos.h>
 
 #define AFE_SE_SECURE_CON1	(AUDIO_BASE + 0x5634)
 
@@ -107,6 +107,13 @@ static void power_on_fpmcu(void)
 	gpio_output(GPIO_FP_RST_1V8_S3_L, 1);
 }
 
+void mainboard_prepare_cr50_reset(void)
+{
+	printk(BIOS_INFO, "%s: Powering MIPI panel off\n", __func__);
+	if (mtk_mipi_panel_poweroff() < 0)
+		printk(BIOS_ERR, "%s: Failed to power off MIPI panel\n", __func__);
+}
+
 enum mtk_storage_type mainboard_get_storage_type(void)
 {
 	uint32_t index = storage_id();
@@ -149,7 +156,7 @@ static void mainboard_init(struct device *dev)
 		register_reset_to_bl31(GPIO_AP_EC_WARM_RST_REQ.id, true);
 
 	if (display_init_required()) {
-		if (mtk_display_init() < 0)
+		if (mtk_display_init(NULL) < 0)
 			printk(BIOS_ERR, "%s: Failed to init display\n", __func__);
 	} else {
 		printk(BIOS_INFO, "%s: Skipping display init; disabling secure mode\n",

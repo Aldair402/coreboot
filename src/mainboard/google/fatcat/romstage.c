@@ -4,8 +4,11 @@
 #include <baseboard/variants.h>
 #include <bootmode.h>
 #include <ec/google/chromeec/ec.h>
+#include <fsp/api.h>
+#include <security/vboot/vboot_common.h>
 #include <soc/romstage.h>
 #include <soc/soc_chip.h>
+#include <static.h>
 #include <string.h>
 
 /*
@@ -44,15 +47,38 @@ void mainboard_memory_init_params(FSPM_UPD *memupd)
 
 	/* Override FSP-M UPD per board if required. */
 	variant_update_soc_memory_init_params(memupd);
+
+	if (!CONFIG(EC_GOOGLE_CHROMEEC))
+		return;
+
+	/* Disable CPU ratio override for unstable power scenarios */
+	if (!google_chromeec_is_battery_present() ||
+			 google_chromeec_is_below_critical_threshold()) {
+		const struct soc_intel_pantherlake_config *config = config_of_soc();
+		FSP_M_CONFIG *m_cfg = &memupd->FspmConfig;
+		if (config->cpu_ratio_override)
+			m_cfg->CpuRatio = 0;
+	}
 }
 
 void platform_romstage_pre_mem(void)
 {
 	/*
-	 * Only alert the user (set LED to red in color) if the lid is closed and the battery
-	 * is critically low without AC power.
+	 * Early initialization of the Chrome EC lightbar.
+	 * Ensures visual continuity if the AP firmware disabled the lightbar
+	 * in a previous boot without a subsequent EC reset.
 	 */
-	if (CONFIG(EC_GOOGLE_CHROMEEC) && CONFIG(VBOOT_LID_SWITCH) && !get_lid_switch() &&
-			 google_chromeec_is_critically_low_on_battery())
-		google_chromeec_set_lightbar_rgb(0xff, 0xff, 0x00, 0x00);
+	if (CONFIG(EC_GOOGLE_CHROMEEC_LED_CONTROL))
+		google_chromeec_lightbar_on();
+}
+
+bool mainboard_can_allow_flex_ratio_override(void)
+{
+    if (!CONFIG(VBOOT))
+        return false;
+
+    if (vboot_recovery_mode_enabled() || vboot_check_recovery_request())
+        return false;
+
+    return true;
 }

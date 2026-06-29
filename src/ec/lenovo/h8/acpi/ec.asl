@@ -17,6 +17,9 @@ Device(EC)
 				HSPA, 1,
 		Offset (0x0C),
 				LEDS, 8,	/* LED state */
+		Offset (0x0d),
+				    , 6,
+				KBBL, 2,	/* Keyboard Backlight */
 		Offset (0x0F),
 				    , 7,
 				TBSW, 1,	/* Tablet mode switch */
@@ -42,7 +45,7 @@ Device(EC)
 				WWEB, 1,
 		Offset (0x3B),
 				    , 1,
-				KBLT, 1,	/* Keyboard Light */
+				KBLT, 1,	/* Keyboard Light (ThinkLight) */
 				    , 2,
 				USPW, 1,	/* USB Power enable */
 		Offset (0x48),
@@ -156,6 +159,11 @@ Device(EC)
 	/* AC status change: not present */
 	Method(_Q27, 0, NotSerialized)
 	{
+		#if CONFIG(H8_HAS_BAT_CHARGE_BEHAVIOUR)
+		/* Reset battery charge behaviour on AC detach */
+		\_SB.PCI0.LPCB.EC.HKEY.RBCB(0)
+		#endif
+
 		Notify (AC, 0x80)
 		EVNT = 0x50
 		\PNOT()

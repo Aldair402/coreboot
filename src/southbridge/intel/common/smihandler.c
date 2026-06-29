@@ -15,6 +15,8 @@
 #include <southbridge/intel/common/pmbase.h>
 #include <smmstore.h>
 
+#include "insmm_sts.h"
+#include "lpc_def.h"
 #include "pmutil.h"
 
 u16 get_pmbase(void)
@@ -266,9 +268,22 @@ static void southbridge_smi_store(void)
 	/* Parameter buffer in EBX */
 	reg_rbx = (uintptr_t)io_smi->rbx;
 
+	const pci_devfn_t lpc_dev = PCI_DEV(0, 0x1f, 0);
+	const bool wp_enabled = !(pci_read_config16(lpc_dev, BIOS_CNTL) & BIOS_CNTL_BIOSWE);
+	if (wp_enabled) {
+		if (CONFIG(HAVE_INSMM_STS))
+			set_insmm_sts(true);
+		pci_or_config16(lpc_dev, BIOS_CNTL, BIOS_CNTL_BIOSWE);
+	}
 	/* drivers/smmstore/smi.c */
 	ret = smmstore_exec(sub_command, (void *)reg_rbx);
 	io_smi->rax = ret;
+
+	if (wp_enabled) {
+		pci_and_config16(lpc_dev, BIOS_CNTL, ~BIOS_CNTL_BIOSWE);
+		if (CONFIG(HAVE_INSMM_STS))
+			set_insmm_sts(false);
+	}
 }
 
 static int mainboard_finalized = 0;
@@ -375,9 +390,9 @@ static void southbridge_smi_tco(void)
 	if (tco_sts & (1 << 8)) { // BIOSWR
 		u8 bios_cntl;
 
-		bios_cntl = pci_read_config8(PCI_DEV(0, 0x1f, 0), 0xdc);
+		bios_cntl = pci_read_config8(PCI_DEV(0, 0x1f, 0), BIOS_CNTL);
 
-		if (bios_cntl & 1) {
+		if (bios_cntl & BIOS_CNTL_BIOSWE) {
 			/* BWE is RW, so the SMI was caused by a
 			 * write to BWE, not by a write to the BIOS
 			 */
@@ -389,8 +404,8 @@ static void southbridge_smi_tco(void)
 			 * box.
 			 */
 			printk(BIOS_DEBUG, "Switching back to RO\n");
-			pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xdc,
-					(bios_cntl & ~1));
+			pci_write_config8(PCI_DEV(0, 0x1f, 0), BIOS_CNTL,
+					(bios_cntl & ~BIOS_CNTL_BIOSWE));
 		} /* No else for now? */
 	} else if (tco_sts & (1 << 3)) { /* TIMEOUT */
 		/* Handle TCO timeout */

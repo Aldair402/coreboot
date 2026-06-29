@@ -14,6 +14,9 @@
 
 #define ACPI_NOTIFY_CROS_EC_MKBP	0x80
 #define ACPI_NOTIFY_CROS_EC_PANIC	0xB0
+/* Windows CrosEc / crosecbus: ACPI notify on GOOG0004 (CREC) */
+#define ACPI_NOTIFY_CROS_EC_S0IX_ENTER	0x01
+#define ACPI_NOTIFY_CROS_EC_S0IX_EXIT	0x02
 
 // Mainboard specific throttle handler
 #ifdef DPTF_ENABLE_CHARGER
@@ -119,6 +122,42 @@ Device (EC0)
 		#include "emem.asl"
 	}
 
+#ifdef EC_FRAMEWORK_ACPI_SHARED_MEM_IO
+	/*
+	 * Framework EC custom shared-memory
+	 *   byte 0 (EC memmap 0x100): system flags
+	 *   byte 1 (EC memmap 0x101): power state
+	 */
+	OperationRegion (FRMW, SystemIO, EC_FRAMEWORK_ACPI_SHARED_MEM_IO, 0x02)
+	Field (FRMW, ByteAcc, NoLock, Preserve)
+	{
+		ADRD, 1,	// ACPI driver ready (exit EC preOS mode)
+		Offset (0x01),	// power-state byte
+		    , 6,	// EC_PS_{ENTER,RESUME}_S3/S4/S5
+		ENS0, 1,	// EC_PS_ENTER_S0ix  (BIT6)
+		RES0, 1,	// EC_PS_RESUME_S0ix (BIT7)
+	}
+#else
+	/* Dummy vars to avoid guarding in S0ix() */
+	Name (ENS0, 0)
+	Name (RES0, 0)
+#endif
+	/*
+	 * S0ix entry/exit notification invoked by PEP LPS0 _DSM
+	 */
+	Method (S0IX, 1, Serialized)
+	{
+		If (Arg0 == 1) {
+			ENS0 = 1	// notify EC: entering S0ix (ENTER_CS)
+			/* Let EC settle before proceeding, same as vendor firmware */
+			Sleep (0xD2)
+			Notify (^CREC, ACPI_NOTIFY_CROS_EC_S0IX_ENTER)
+		} Else {
+			RES0 = 1	// notify EC: resuming from S0ix (RESUME_CS)
+			Notify (^CREC, ACPI_NOTIFY_CROS_EC_S0IX_EXIT)
+		}
+	}
+
 #ifdef EC_ENABLE_LID_SWITCH
 	/* LID Switch */
 	Device (LID0)
@@ -134,6 +173,18 @@ Device (EC0)
 #endif
 	}
 #endif /* EC_ENABLE_LID_SWITCH */
+
+#ifdef EC_ENABLE_POWER_BUTTON
+	/* Power Button */
+	Device (PWRB)
+	{
+		Name (_HID, EisaId ("PNP0C0C"))
+
+#ifdef EC_ENABLE_WAKE_PIN
+		Name (_PRW, Package () { EC_ENABLE_WAKE_PIN, 0x5 })
+#endif
+	}
+#endif /* EC_ENABLE_POWER_BUTTON */
 
 	Method (TINS, 1, Serialized)
 	{
@@ -171,6 +222,15 @@ Device (EC0)
 
 	Method (_REG, 2, NotSerialized)
 	{
+#ifdef EC_FRAMEWORK_ACPI_SHARED_MEM_IO
+		/*
+		 * When OSPM's ACPI EC driver connects the EmbeddedControl region,
+		 * the OS is up: tell the Framework EC to leave "preOS" mode
+		 */
+		If ((Arg0 == 0x03) && (Arg1 == 0x01)) {
+			ADRD = 1
+		}
+#endif
 		// Initialize AC power state
 		\PWRS = ACEX
 		/*
@@ -202,6 +262,20 @@ Device (EC0)
 		Notify (\_SB.DPTF, INT3400_ODVP_CHANGED)
 #endif
 	}
+
+#ifdef EC_FRAMEWORK_ACPI_SHARED_MEM_IO
+	Method (_INI, 0, NotSerialized)
+	{
+		/*
+		 * The vendor firmware signals driver-ready from _INI as well as
+		 * from _REG (for ACPI 2.0+ OSes), so the EC reliably leaves
+		 * "preOS" mode even when the EC region is connected late.
+		 */
+		If (_REV >= 0x02) {
+			ADRD = 1
+		}
+	}
+#endif
 
 	/* Read requested temperature and check against EC error values */
 	Method (TSRD, 1, Serialized)
@@ -274,6 +348,9 @@ Device (EC0)
 	Method (_Q03, 0, NotSerialized)
 	{
 		Printf ("EC: POWER BUTTON")
+#ifdef EC_ENABLE_POWER_BUTTON
+		Notify (PWRB, 0x80)
+#endif
 	}
 
 	// AC Connected
@@ -460,6 +537,18 @@ Device (EC0)
 #endif
 #ifdef EC_ENABLE_TBMC_DEVICE
 		Notify (^CREC.TBMC, 0x80)
+#endif
+#if CONFIG(EC_CHROMEEC_USE_VENDOR_TABLET_CONTROLS)
+#if CONFIG(SOC_INTEL_COMMON)
+		If (^TBMD == 1) {
+			Notify (VBTN, 0xCC)
+		} Else {
+			Notify (VBTN, 0xCD)
+		}
+#endif
+#if CONFIG(SOC_AMD_COMMON)
+		Notify (VGBI, 0x81)
+#endif
 #endif
 #if CONFIG(SOC_AMD_COMMON_BLOCK_ACPI_DPTC)
 		If (CondRefOf (\_SB.DPTC)) {
@@ -666,5 +755,14 @@ Device (EC0)
 
 #ifdef EC_ENABLE_KEYBOARD_BACKLIGHT
 	#include "keyboard_backlight.asl"
+#endif
+
+#if CONFIG(EC_CHROMEEC_USE_VENDOR_TABLET_CONTROLS)
+#if CONFIG(SOC_INTEL_COMMON)
+	#include "vbtn.asl"
+#endif
+#if CONFIG(SOC_AMD_COMMON)
+	#include "vgbi.asl"
+#endif
 #endif
 }

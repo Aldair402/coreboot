@@ -130,11 +130,10 @@ chip northbridge/intel/sandybridge
 					register "config2" = "0xa0"
 					register "config3" = "0xe2"
 
-					register "has_keyboard_backlight" = "0"
-
 					register "beepmask0" = "0x02"
 					register "beepmask1" = "0x86"
-					register "has_power_management_beeps" = "1"
+					register "has_thinklight" = "true"
+					register "has_power_management_beeps" = "true"
 					register "event2_enable" = "0xff"
 					register "event3_enable" = "0xff"
 					register "event4_enable" = "0xf0"
@@ -153,7 +152,7 @@ chip northbridge/intel/sandybridge
 					register "bdc_gpio_lvl" = "0"
 				end
 				chip drivers/lenovo/hybrid_graphics
-					device pnp ff.f on end # dummy
+					device generic 0 alias hg_mux on end # dummy
 
 					register "detect_gpio" = "21"
 

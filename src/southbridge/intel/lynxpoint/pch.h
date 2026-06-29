@@ -4,7 +4,11 @@
 #define SOUTHBRIDGE_INTEL_LYNXPOINT_PCH_H
 
 #include <acpi/acpi.h>
+#include <southbridge/intel/common/lpc_def.h> /* IWYU pragma: export */
 #include <southbridge/intel/common/rcba.h> /* IWYU pragma: export */
+
+/* TODO: Temporary to help unify Lynx Point and Wildcat Point, drop afterwards */
+#include <southbridge/intel/lynxpoint/pch_minimal.h> /* IWYU pragma: export */
 
 #define CROS_GPIO_DEVICE_NAME	"LynxPoint"
 
@@ -46,71 +50,7 @@
 
 #define SMBUS_SLAVE_ADDR	0x24
 
-#if CONFIG(INTEL_LYNXPOINT_LP)
-#define DEFAULT_PMBASE		0x1000
-#define DEFAULT_GPIOBASE	0x1400
-#define DEFAULT_GPIOSIZE	0x400
-#else
-#define DEFAULT_PMBASE		0x500
-#define DEFAULT_GPIOBASE	0x480
-#define DEFAULT_GPIOSIZE	0x80
-#endif
-
 #ifndef __ACPI__
-
-#if CONFIG(INTEL_LYNXPOINT_LP)
-#define MAX_USB2_PORTS	10
-#define MAX_USB3_PORTS	4
-#else
-#define MAX_USB2_PORTS	14
-#define MAX_USB3_PORTS	6
-#endif
-
-/* There are 8 OC pins */
-#define USB_OC_PIN_SKIP	8
-
-enum usb2_port_location {
-	USB_PORT_SKIP = 0,
-	USB_PORT_BACK_PANEL,
-	USB_PORT_FRONT_PANEL,
-	USB_PORT_DOCK,
-	USB_PORT_MINI_PCIE,
-	USB_PORT_FLEX,
-	USB_PORT_INTERNAL,
-};
-
-/*
- * USB port length is in MRC format: binary-coded decimal length in tenths of an inch.
- *   4.2 inches -> 0x0042
- *  12.7 inches -> 0x0127
- */
-struct usb2_port_config {
-	uint16_t length;
-	bool enable;
-	unsigned short oc_pin;
-	enum usb2_port_location location;
-};
-
-struct usb3_port_config {
-	bool enable;
-	unsigned int oc_pin;
-};
-
-/* Mainboard-specific USB configuration */
-extern const struct usb2_port_config mainboard_usb2_ports[MAX_USB2_PORTS];
-extern const struct usb3_port_config mainboard_usb3_ports[MAX_USB3_PORTS];
-
-static inline bool pch_is_lp(void)
-{
-	return CONFIG(INTEL_LYNXPOINT_LP);
-}
-
-/* PCH platform types, safe for MRC consumption */
-enum pch_platform_type {
-	PCH_TYPE_MOBILE	 = 0,
-	PCH_TYPE_DESKTOP = 1, /* or server */
-	PCH_TYPE_ULT	 = 5,
-};
 
 void pch_dmi_setup_physical_layer(void);
 void pch_dmi_tc_vc_mapping(u32 vc0, u32 vc1, u32 vcp, u32 vcm);
@@ -165,10 +105,6 @@ void pch_enable_lpc(void);
 void uart_bootblock_init(void);
 void mainboard_config_superio(void);
 void mainboard_config_rcba(void);
-
-#define MAINBOARD_POWER_OFF	0
-#define MAINBOARD_POWER_ON	1
-#define MAINBOARD_POWER_KEEP	2
 
 /* PCI Configuration Space (D30:F0): PCI2PCI */
 #define PSTS	0x06
@@ -230,39 +166,11 @@ void mainboard_config_rcba(void);
 #define PMBASE			0x40
 #define ACPI_CNTL		0x44
 #define   ACPI_EN		(1 << 7)
-#define BIOS_CNTL		0xDC
-#define GPIO_BASE		0x48 /* LPC GPIO Base Address Register */
 #define GPIO_CNTL		0x4C /* LPC GPIO Control Register */
 #define GPIO_ROUT		0xb8
 
-#define PIRQA_ROUT		0x60
-#define PIRQB_ROUT		0x61
-#define PIRQC_ROUT		0x62
-#define PIRQD_ROUT		0x63
-#define PIRQE_ROUT		0x68
-#define PIRQF_ROUT		0x69
-#define PIRQG_ROUT		0x6A
-#define PIRQH_ROUT		0x6B
-
-#define LPC_IO_DEC		0x80 /* IO Decode Ranges Register */
-#define LPC_EN			0x82 /* LPC IF Enables Register */
-#define  CNF2_LPC_EN		(1 << 13) /* 0x4e/0x4f */
-#define  CNF1_LPC_EN		(1 << 12) /* 0x2e/0x2f */
-#define  MC_LPC_EN		(1 << 11) /* 0x62/0x66 */
-#define  KBC_LPC_EN		(1 << 10) /* 0x60/0x64 */
-#define  GAMEH_LPC_EN		(1 << 9)  /* 0x208/0x20f */
-#define  GAMEL_LPC_EN		(1 << 8)  /* 0x200/0x207 */
-#define  FDD_LPC_EN		(1 << 3)  /* LPC_IO_DEC[12] */
-#define  LPT_LPC_EN		(1 << 2)  /* LPC_IO_DEC[9:8] */
-#define  COMB_LPC_EN		(1 << 1)  /* LPC_IO_DEC[6:4] */
-#define  COMA_LPC_EN		(1 << 0)  /* LPC_IO_DEC[2:0] */
 #define LPC_IBDF		0x6C /* I/O APIC bus/dev/fn */
 #define LPC_HnBDF(n)		(0x70 + (n) * 2) /* HPET n bus/dev/fn */
-#define LPC_GEN1_DEC		0x84 /* LPC IF Generic Decode Range 1 */
-#define LPC_GEN2_DEC		0x88 /* LPC IF Generic Decode Range 2 */
-#define LPC_GEN3_DEC		0x8c /* LPC IF Generic Decode Range 3 */
-#define LPC_GEN4_DEC		0x90 /* LPC IF Generic Decode Range 4 */
-#define LGMR			0x98 /* LPC Generic Memory Range */
 
 /* PCI Configuration Space (D31:F2): SATA */
 #define PCH_SATA_DEV		PCI_DEV(0, 0x1f, 2)
@@ -463,9 +371,7 @@ void mainboard_config_rcba(void);
 #define HST_EN			(1 << 0)
 
 /* Southbridge IO BARs */
-
 #define PMBASE			0x40
-#define GPIOBASE		0x48
 
 #define CIR0050		0x0050	/* 32bit */
 
@@ -714,21 +620,7 @@ void mainboard_config_rcba(void);
 #define LP_GPE0_EN_3	0x98
 #define LP_GPE0_EN_4	0x9c
 
-/*
- * SPI Opcode Menu setup for SPIBAR lockdown
- * should support most common flash chips.
- */
-
-#define SPIBAR_OFFSET 0x3800
-#define SPIBAR8(x) RCBA8((x) + SPIBAR_OFFSET)
-#define SPIBAR16(x) RCBA16((x) + SPIBAR_OFFSET)
-#define SPIBAR32(x) RCBA32((x) + SPIBAR_OFFSET)
-
-/* Registers within the SPIBAR */
-#define SSFC 0x91
-#define FDOC 0xb0
-#define FDOD 0xb4
-
+/* Registers within SPIBAR */
 #define SPIBAR_HSFS                 0x3804   /* SPI hardware sequence status */
 #define  SPIBAR_HSFS_SCIP           (1 << 5) /* SPI Cycle In Progress */
 #define  SPIBAR_HSFS_AEL            (1 << 2) /* SPI Access Error Log */
@@ -742,6 +634,10 @@ void mainboard_config_rcba(void);
 #define  SPIBAR_HSFC_GO             (1 << 0) /* GO: start SPI transaction */
 #define SPIBAR_FADDR                0x3808   /* SPI flash address */
 #define SPIBAR_FDATA(n)             (0x3810 + (4 * (n))) /* SPI flash data */
+
+#define SPIBAR_SSFC                 0x3891
+#define SPIBAR_FDOC                 0x38b0
+#define SPIBAR_FDOD                 0x38b4
 
 #endif /* __ACPI__ */
 #endif /* SOUTHBRIDGE_INTEL_LYNXPOINT_PCH_H */

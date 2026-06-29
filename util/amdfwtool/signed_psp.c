@@ -39,8 +39,9 @@ static uint16_t get_psp_fw_type(enum platform soc_id, struct amd_fw_header *head
 	switch (soc_id) {
 	case PLATFORM_MENDOCINO:
 	case PLATFORM_PHOENIX:
-	case PLATFORM_GLINDA:
-	case PLATFORM_FAEGAN:
+	case PLATFORM_STRIX:
+	case PLATFORM_KRACKAN2E:
+	case PLATFORM_STRIXHALO:
 		/* Fallback to fw_type if fw_id is not populated, which serves the same
 		   purpose on older SoCs. */
 		return header->fw_id ? header->fw_id : header->fw_type;
@@ -213,7 +214,7 @@ static void write_psp_firmware_hash(amd_fw_entry *fw_table)
 {
 	uint8_t hash_tbl_id;
 
-	for (unsigned int i = 0; fw_table[i].type != AMD_FW_INVALID; i++) {
+	for (unsigned int i = 0; fw_table[i].type != AMD_FW_PSP_INVALID; i++) {
 		hash_tbl_id = fw_table[i].hash_tbl_id;
 		assert(hash_files[hash_tbl_id].present);
 
@@ -247,7 +248,7 @@ static void write_psp_firmware_hash(amd_fw_entry *fw_table)
 	/* Add all the SHA256 hash entries first followed by SHA384 entries. PSP verstage
 	   processes the table in that order. Mixing and matching SHA256 and SHA384 entries
 	   will cause the hash verification failure at run-time. */
-	for (unsigned int i = 0; fw_table[i].type != AMD_FW_INVALID; i++) {
+	for (unsigned int i = 0; fw_table[i].type != AMD_FW_PSP_INVALID; i++) {
 		hash_tbl_id = fw_table[i].hash_tbl_id;
 		for (unsigned int j = 0; j < fw_table[i].num_hash_entries; j++) {
 			if (fw_table[i].hash_entries[j].sha_len == SHA256_DIGEST_LENGTH)
@@ -256,7 +257,7 @@ static void write_psp_firmware_hash(amd_fw_entry *fw_table)
 		}
 	}
 
-	for (unsigned int i = 0; fw_table[i].type != AMD_FW_INVALID; i++) {
+	for (unsigned int i = 0; fw_table[i].type != AMD_FW_PSP_INVALID; i++) {
 		hash_tbl_id = fw_table[i].hash_tbl_id;
 		for (unsigned int j = 0; j < fw_table[i].num_hash_entries; j++) {
 			if (fw_table[i].hash_entries[j].sha_len == SHA384_DIGEST_LENGTH)
@@ -265,7 +266,7 @@ static void write_psp_firmware_hash(amd_fw_entry *fw_table)
 		}
 	}
 
-	for (unsigned int i = 0; fw_table[i].type != AMD_FW_INVALID; i++) {
+	for (unsigned int i = 0; fw_table[i].type != AMD_FW_PSP_INVALID; i++) {
 		if (!fw_table[i].num_hash_entries || !fw_table[i].hash_entries)
 			continue;
 
@@ -317,7 +318,7 @@ void process_signed_psp_firmwares(const char *signed_rom,
 		return;
 	}
 
-	for (i = 0; fw_table[i].type != AMD_FW_INVALID; i++) {
+	for (i = 0; fw_table[i].type != AMD_FW_PSP_INVALID; i++) {
 		fw_table[i].num_hash_entries = 0;
 		fw_table[i].hash_entries = NULL;
 

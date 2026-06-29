@@ -13,6 +13,7 @@
 #include <cpu/intel/smm_reloc.h>
 #include <cpu/intel/em64t101_save_state.h>
 #include <intelblocks/cpulib.h>
+#include <intelblocks/mp_init.h>
 #include <intelpch/lockdown.h>
 #include <soc/msr.h>
 #include <soc/pm.h>
@@ -70,9 +71,13 @@ static void xeon_configure_mca(void)
  * FSP-S updates microcodes serialized, so do the same.
  *
  */
-static void get_microcode_info(const void **microcode, int *parallel)
+void get_microcode_info(const void **microcode, size_t *size, int *parallel)
 {
-	*microcode = intel_microcode_find();
+	const struct microcode *microcode_file = intel_microcode_find();
+	if (microcode_file != NULL)
+		*size = get_microcode_size(microcode_file);
+
+	*microcode = microcode_file;
 	*parallel = 0;
 }
 
@@ -246,6 +251,9 @@ static void pre_mp_init(void)
 {
 	printk(BIOS_DEBUG, "%s: entry\n", __func__);
 
+	const void *microcode_patch = intel_microcode_find();
+	intel_microcode_load_unlocked(microcode_patch);
+
 	x86_setup_mtrrs_with_detect();
 	x86_mtrr_check();
 }
@@ -278,13 +286,6 @@ static const struct mp_ops mp_ops = {
 void mp_init_cpus(struct bus *bus)
 {
 	FUNC_ENTER();
-
-	const void *microcode_patch = intel_microcode_find();
-
-	if (!microcode_patch)
-		printk(BIOS_ERR, "microcode not found in CBFS!\n");
-
-	intel_microcode_load_unlocked(microcode_patch);
 
 	/*
 	 * This gets used in cpu device callback. Other than cpu 0,

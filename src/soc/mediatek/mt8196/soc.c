@@ -12,7 +12,6 @@
 #include <soc/gpueb.h>
 #include <soc/mcupm.h>
 #include <soc/mmu_operations.h>
-#include <soc/mt6685.h>
 #include <soc/mtk_fsp.h>
 #include <soc/pcie.h>
 #include <soc/pi_image.h>
@@ -70,10 +69,15 @@ static void fsp_init(void *arg)
 
 BOOT_STATE_INIT_ENTRY(BS_DEV_INIT, BS_ON_ENTRY, fsp_init, NULL);
 
-static void soc_init(struct device *dev)
+static void mmu_disable_l2c_sram(void *unused)
 {
 	mtk_mmu_disable_l2c_sram();
+}
 
+BOOT_STATE_INIT_ENTRY(BS_POST_DEVICE, BS_ON_EXIT, mmu_disable_l2c_sram, NULL);
+
+static void soc_init(struct device *dev)
+{
 	if (dpm_init())
 		printk(BIOS_ERR, "dpm init failed, DVFS may not work\n");
 	if (spm_init())
@@ -82,7 +86,6 @@ static void soc_init(struct device *dev)
 	sspm_init();
 	gpueb_init();
 	mcupm_init();
-	mt6685_init_pmif_arb();
 	/*
 	 * According to CI-700 documentation:
 	 * Registers are only accessible by Secure accesses. Writes to them must occur prior to
@@ -119,6 +122,7 @@ static void enable_soc_dev(struct device *dev)
 		} else {
 			printk(BIOS_DEBUG, "Skip setting PCIe ops\n");
 			dev->ops = &noop_domain_ops;
+			dev->enabled = 0;
 		}
 	}
 }

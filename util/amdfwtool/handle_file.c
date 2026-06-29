@@ -83,7 +83,7 @@ ssize_t write_from_buf_to_file(int fd, const void *buf, size_t buf_size)
 	return buf_size;
 }
 
-ssize_t write_body(char *output, void *body_offset, ssize_t body_size)
+ssize_t write_blob(char *output, void *body_offset, ssize_t body_size, char *suffix)
 {
 	char body_name[PATH_MAX], body_tmp_name[PATH_MAX];
 	int ret;
@@ -93,7 +93,7 @@ ssize_t write_body(char *output, void *body_offset, ssize_t body_size)
 	/* Create a tmp file and rename it at the end so that make does not get confused
 	   if amdfwtool is killed for some unexpected reasons. */
 	ret = snprintf(body_tmp_name, sizeof(body_tmp_name), "%s%s%s",
-			output, BODY_FILE_SUFFIX, TMP_FILE_SUFFIX);
+			output, suffix, TMP_FILE_SUFFIX);
 	if (ret < 0) {
 		fprintf(stderr, "Error %s forming BODY tmp file name: %d\n",
 							strerror(errno), ret);
@@ -117,7 +117,7 @@ ssize_t write_body(char *output, void *body_offset, ssize_t body_size)
 	close(fd);
 
 	/* Rename the tmp file */
-	ret = snprintf(body_name, sizeof(body_name), "%s%s", output, BODY_FILE_SUFFIX);
+	ret = snprintf(body_name, sizeof(body_name), "%s%s", output, suffix);
 	if (ret < 0) {
 		fprintf(stderr, "Error %s forming BODY file name: %d\n", strerror(errno), ret);
 		return -1;
@@ -131,7 +131,8 @@ ssize_t write_body(char *output, void *body_offset, ssize_t body_size)
 	return bytes;
 }
 
-ssize_t copy_blob(void *dest, const char *src_file, size_t room)
+/* Copy the contents of the source file into the rom at current position */
+ssize_t copy_blob(context *ctx, const char *src_file)
 {
 	int fd;
 	struct stat fd_stat;
@@ -150,13 +151,13 @@ ssize_t copy_blob(void *dest, const char *src_file, size_t room)
 		return -2;
 	}
 
-	if ((size_t)fd_stat.st_size > room) {
+	if ((size_t)fd_stat.st_size > (ctx->rom_size - ctx->current)) {
 		fprintf(stderr, "Error: %s will not fit.  Exiting.\n", src_file);
 		close(fd);
 		return -3;
 	}
 
-	bytes = read(fd, dest, (size_t)fd_stat.st_size);
+	bytes = read_from_file_to_buf(fd, ctx->rom + ctx->current, (size_t)fd_stat.st_size);
 	close(fd);
 	if (bytes != (ssize_t)fd_stat.st_size) {
 		fprintf(stderr, "Error while reading %s\n", src_file);

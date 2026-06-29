@@ -360,6 +360,25 @@ config USE_QC_BLOBS
 	  mainboards cannot be built and will be hidden from the "Mainboards"
 	  section.
 
+config QC_SECURE_BOOT_BLOBS
+	bool "Enable Qualcomm secure/signed blobs for fused SoCs"
+	depends on USE_QC_BLOBS
+	help
+	  This option enables the inclusion of OEM-signed binaries and
+	  secure-world components required for booting fused Qualcomm SoCs.
+
+	  When enabled, the build system will look for signed versions of
+	  QcLib, QC-SEC, and secondary bootloader stages that match the
+	  Root of Trust (RoT) fused into the SoC.
+
+	  Select this if you are building firmware for production hardware
+	  or "fused" development units that enforce OEM signature
+	  verification at the hardware level.
+
+	  Note: Using this option without the correct signing keys or
+	  signed blobs will result in a bricked boot process on fused
+	  hardware.
+
 config COVERAGE
 	bool "Code coverage support"
 	depends on COMPILER_GCC
@@ -799,6 +818,14 @@ config STACK_SIZE
 	default 0x2000 if ARCH_X86
 	default 0x0
 
+config THREAD_STACK_SIZE
+	hex
+	depends on COOP_MULTITASKING
+	default 0x2000
+	help
+	  The stack size for each cooperative thread. This is separate from
+	  the main CPU stack size (STACK_SIZE).
+
 config MAX_CPUS
 	int
 	default 1
@@ -857,7 +884,7 @@ config TIMER_QUEUE
 config COOP_MULTITASKING
 	def_bool n
 	select TIMER_QUEUE
-	depends on ARCH_X86
+	depends on ARCH_X86 || ARCH_ARM64
 	help
 	  Cooperative multitasking allows callbacks to be multiplexed on the
 	  main thread. With this enabled it allows for multiple execution paths
@@ -913,18 +940,6 @@ config MAINBOARD_NEEDS_CMOS_OPTIONS
 config PCI_IO_CFG_EXT
 	bool
 	default n
-
-config IOAPIC
-	bool
-	default y if SMP
-	default n
-
-config IOAPIC_8BIT_ID
-	bool
-	default n
-	depends on IOAPIC
-	help
-	  Select this option if the hardware support 8bit long IOAPIC IDs.
 
 config USE_WATCHDOG_ON_BOOT
 	bool
@@ -1011,6 +1026,13 @@ config SMBIOS_TYPE41_PROVIDED_BY_DEVTREE
 config SMBIOS_PROVIDED_BY_MOBO
 	bool
 	default n
+
+config SMBIOS_TYPE4_SOCKETED_CPU
+	bool
+	default n
+	help
+	  If enabled the CPU can be replaced and Type 4 advertises upgrade
+	  support.
 
 if GENERATE_SMBIOS_TABLES
 
@@ -1448,10 +1470,6 @@ endmenu
 # the end of this file gives the most flexibility.
 
 source "src/lib/Kconfig"
-
-config WARNINGS_ARE_ERRORS
-	bool
-	default y
 
 # The four POWER_BUTTON_DEFAULT_ENABLE, POWER_BUTTON_DEFAULT_DISABLE,
 # POWER_BUTTON_FORCE_ENABLE and POWER_BUTTON_FORCE_DISABLE options are

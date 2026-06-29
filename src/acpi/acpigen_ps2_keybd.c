@@ -64,11 +64,6 @@ static const uint32_t action_keymaps[] = {
 
 /* Keymap for numeric keypad keys */
 static uint32_t numeric_keypad_keymaps[] = {
-	/* Row-0 */
-	KEYMAP(0xc9, KEY_PAGEUP),
-	KEYMAP(0xd1, KEY_PAGEDOWN),
-	KEYMAP(0xc7, KEY_HOME),
-	KEYMAP(0xcf, KEY_END),
 	/* Row-1 */
 	KEYMAP(0xb5, KEY_KPSLASH),
 	KEYMAP(0x37, KEY_KPASTERISK),
@@ -181,6 +176,13 @@ static uint32_t rest_of_keymaps[] = {
 	KEYMAP(0xd2, KEY_INSERT),
 	/* Screen Lock */
 	KEYMAP(0xab, KEY_SCREENLOCK),
+	/* Navigation keys */
+	KEYMAP(0xc9, KEY_PAGEUP),
+	KEYMAP(0xd1, KEY_PAGEDOWN),
+	KEYMAP(0xc7, KEY_HOME),
+	KEYMAP(0xcf, KEY_END),
+	/* Contextual Insert Key */
+	KEYMAP(0xac, KEY_CONTEXTUAL_INSERT),
 };
 
 static void ssdt_generate_physmap(struct acpi_dp *dp, uint8_t num_top_row_keys,
@@ -303,6 +305,39 @@ static void ssdt_generate_keymap(struct acpi_dp *dp, uint8_t num_top_row_keys,
 	acpi_dp_add_array(dp, dp_array);
 }
 
+static bool ps2_keyboard_dsd_args_valid(const char *caller, const char *scope,
+					uint8_t num_top_row_keys)
+{
+	if (!scope ||
+	    num_top_row_keys < PS2_MIN_TOP_ROW_KEYS ||
+	    num_top_row_keys > PS2_MAX_TOP_ROW_KEYS) {
+		printk(BIOS_ERR, "PS2K: %s: invalid args\n", caller);
+		return false;
+	}
+
+	return true;
+}
+
+void acpigen_ps2_keyboard_physmap_dsd(const char *scope, uint8_t num_top_row_keys,
+				      enum ps2_action_key action_keys[])
+{
+	struct acpi_dp *dsd;
+
+	if (!ps2_keyboard_dsd_args_valid(__func__, scope, num_top_row_keys))
+		return;
+
+	dsd = acpi_dp_new_table("_DSD");
+	if (!dsd) {
+		printk(BIOS_ERR, "PS2K: couldn't write _DSD\n");
+		return;
+	}
+
+	acpigen_write_scope(scope);
+	ssdt_generate_physmap(dsd, num_top_row_keys, action_keys);
+	acpi_dp_write(dsd);
+	acpigen_pop_len(); /* Scope */
+}
+
 void acpigen_ps2_keyboard_dsd(const char *scope, uint8_t num_top_row_keys,
 			      enum ps2_action_key action_keys[],
 			      bool can_send_function_keys,
@@ -313,12 +348,8 @@ void acpigen_ps2_keyboard_dsd(const char *scope, uint8_t num_top_row_keys,
 {
 	struct acpi_dp *dsd;
 
-	if (!scope ||
-	    num_top_row_keys < PS2_MIN_TOP_ROW_KEYS ||
-	    num_top_row_keys > PS2_MAX_TOP_ROW_KEYS) {
-		printk(BIOS_ERR, "PS2K: %s: invalid args\n", __func__);
+	if (!ps2_keyboard_dsd_args_valid(__func__, scope, num_top_row_keys))
 		return;
-	}
 
 	dsd = acpi_dp_new_table("_DSD");
 	if (!dsd) {

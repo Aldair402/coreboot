@@ -59,6 +59,7 @@ config SOC_AMD_REMBRANDT_BASE
 	select SOC_AMD_COMMON_BLOCK_MCAX
 	select SOC_AMD_COMMON_BLOCK_NONCAR
 	select SOC_AMD_COMMON_BLOCK_PCI
+	select SOC_AMD_COMMON_BLOCK_PCI_DOMAIN_ROOT_PRT
 	select SOC_AMD_COMMON_BLOCK_PCI_MMCONF
 	select SOC_AMD_COMMON_BLOCK_PCIE_GPP_DRIVER
 	select SOC_AMD_COMMON_BLOCK_PM
@@ -72,6 +73,7 @@ config SOC_AMD_REMBRANDT_BASE
 	select SOC_AMD_COMMON_BLOCK_SMU
 	select SOC_AMD_COMMON_BLOCK_SMU_SX_ENTRY
 	select SOC_AMD_COMMON_BLOCK_SPI
+	select SOC_AMD_COMMON_BLOCK_SPI_DWORD_ACCESS
 	select SOC_AMD_COMMON_BLOCK_STB
 	select SOC_AMD_COMMON_BLOCK_SVI3
 	select SOC_AMD_COMMON_BLOCK_TSC
@@ -94,7 +96,6 @@ config SOC_AMD_REMBRANDT_BASE
 	select VBOOT_MUST_REQUEST_DISPLAY if VBOOT
 	select VBOOT_X86_SHA256_ACCELERATION if VBOOT
 	select X86_AMD_FIXED_MTRRS
-	select X86_INIT_NEED_1_SIPI
 
 config SOC_AMD_MENDOCINO
 	bool
@@ -115,6 +116,9 @@ config CHIPSET_DEVICETREE
 	string
 	default "soc/amd/mendocino/chipset_mendocino.cb" if SOC_AMD_MENDOCINO
 	default "soc/amd/mendocino/chipset_rembrandt.cb"
+
+config FSP_HEADER_PATH
+	default "src/vendorcode/amd/fsp/mendocino"
 
 config FSP_M_FILE
 	string "FSP-M (memory init) binary path and filename"

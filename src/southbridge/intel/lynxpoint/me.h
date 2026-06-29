@@ -3,7 +3,6 @@
 #ifndef _INTEL_ME_H
 #define _INTEL_ME_H
 
-#include <device/device.h>
 #include <types.h>
 
 #define ME_RETRY		100000	/* 1 second */
@@ -12,10 +11,6 @@
 /*
  * Management Engine PCI registers
  */
-
-#define PCI_CPU_DEVICE		PCI_DEV(0,0,0)
-#define PCI_CPU_MEBASE_L	0x70	/* Set by MRC */
-#define PCI_CPU_MEBASE_H	0x74	/* Set by MRC */
 
 #define PCI_ME_HFS		0x40
 #define  ME_HFS_CWS_RESET	0
@@ -88,6 +83,10 @@ union me_uma {
 #define  ME_INIT_STATUS_NOMEM	1
 #define  ME_INIT_STATUS_ERROR	2
 #define  ME_INIT_STATUS_SUCCESS_OTHER 3 /* SEE ME9 BWG */
+
+#define ME_HSIO_MESSAGE		(7 << 28)
+#define ME_HSIO_CMD_GETHSIOVER	1
+#define ME_HSIO_CMD_CLOSE	0
 
 union me_did {
 	struct __packed {
@@ -196,6 +195,8 @@ union me_hfs2 {
 	u32 raw;
 };
 
+#define PCI_ME_HFS5		0x68
+
 #define PCI_ME_H_GS2		0x70
 #define   PCI_ME_MBP_GIVE_UP	0x01
 
@@ -260,19 +261,19 @@ union mei_header {
 };
 
 #define MKHI_GROUP_ID_CBM	0x00
+#define  MKHI_GLOBAL_RESET	0x0b
 #define MKHI_GROUP_ID_FWCAPS	0x03
+#define  MKHI_FWCAPS_GET_RULE	0x02
+#define MKHI_GROUP_ID_HMRFPO	0x05
+#define  MKHI_HMRFPO_LOCK	0x02
+#define  MKHI_HMRFPO_LOCK_NOACK	0x05
 #define MKHI_GROUP_ID_MDES	0x08
+#define  MKHI_MDES_ENABLE	0x09
 #define MKHI_GROUP_ID_GEN	0xff
-
-#define MKHI_GLOBAL_RESET	0x0b
-
-#define MKHI_FWCAPS_GET_RULE	0x02
-
-#define MKHI_MDES_ENABLE	0x09
-
-#define MKHI_GET_FW_VERSION	0x02
-#define MKHI_END_OF_POST	0x0c
-#define MKHI_FEATURE_OVERRIDE	0x14
+#define  MKHI_GET_FW_VERSION	0x02
+#define  MKHI_END_OF_POST	0x0c
+#define  MKHI_FEATURE_OVERRIDE	0x14
+#define  MKHI_END_OF_POST_NOACK	0x1a
 
 struct mkhi_header {
 	u32 group_id: 8;
@@ -334,17 +335,6 @@ enum me_bios_path {
 	ME_DISABLE_BIOS_PATH,
 	ME_FIRMWARE_UPDATE_BIOS_PATH,
 };
-
-/* Defined in me_status.c for both romstage and ramstage */
-void intel_me_status(union me_hfs hfs, union me_hfs2 hfs2);
-
-void intel_early_me_status(void);
-int intel_early_me_init(void);
-bool intel_early_me_cpu_replacement_check(void);
-int intel_early_me_uma_size(void);
-int intel_early_me_init_done(u8 status);
-
-void intel_me_finalize(struct device *dev);
 
 /*
  * ME to BIOS Payload Datastructures and definitions. The ordering of the
@@ -510,5 +500,15 @@ struct me_fwcaps {
 	struct mbp_mefwcaps caps_sku;
 	u8 reserved[3];
 } __packed;
+void intel_me_hsio_version(uint16_t *version, uint16_t *checksum);
+
+/* Defined in me_status.c for both romstage and ramstage */
+void intel_me_status(union me_hfs hfs, union me_hfs2 hfs2);
+
+void intel_early_me_status(void);
+int intel_early_me_init(void);
+bool intel_early_me_cpu_replacement_check(void);
+int intel_early_me_uma_size(void);
+int intel_early_me_init_done(u8 status);
 
 #endif /* _INTEL_ME_H */

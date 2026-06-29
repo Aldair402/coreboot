@@ -14,6 +14,8 @@ config BOARD_GOOGLE_BASEBOARD_JECHT
 	select MEMORY_MAPPED_TPM
 	select MAINBOARD_HAS_TPM1
 	select SOC_INTEL_BROADWELL
+	select RT8168_GET_MAC_FROM_VPD
+	select RT8168_SUPPORT_LEGACY_VPD_MAC
 	select SUPERIO_ITE_IT8772F
 	select SYSTEM_TYPE_MINIPC
 
@@ -55,6 +57,9 @@ config MAINBOARD_PART_NUMBER
 config INTEL_GMA_VBT_FILE
 	default "src/mainboard/\$(MAINBOARDDIR)/data.vbt" if !BOARD_GOOGLE_TIDUS
 
+config CBFS_SIZE
+	default 0x600000
+
 config MAINBOARD_SMBIOS_MANUFACTURER
 	string
 	default "GOOGLE"
@@ -65,5 +70,8 @@ config PCIEXP_AER
 config EDK2_BOOT_TIMEOUT
 	int
 	default 5
+
+config INTEL_OC_MAILBOX_ENABLE_UNDERVOLTING
+	default y
 
 endif

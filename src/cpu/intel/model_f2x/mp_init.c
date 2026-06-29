@@ -8,7 +8,6 @@
 #include <cpu/x86/mtrr.h>
 #include <cpu/x86/mp.h>
 #include <device/device.h>
-#include <device/pci_ops.h>
 #include <types.h>
 
 /* Parallel MP initialization support. */
@@ -27,9 +26,13 @@ static int get_cpu_count(void)
 	return CONFIG_MAX_CPUS;
 }
 
-static void get_microcode_info(const void **microcode, int *parallel)
+static void get_microcode_info(const void **microcode, size_t *size, int *parallel)
 {
-	*microcode = intel_microcode_find();
+	const struct microcode *microcode_file = intel_microcode_find();
+	if (microcode_file != NULL)
+		*size = get_microcode_size(microcode_file);
+
+	*microcode = microcode_file;
 	*parallel = !intel_ht_supported();
 }
 

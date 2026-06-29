@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include <device/pci_ops.h>
 #include <acpi/acpi.h>
 #include <southbridge/intel/lynxpoint/pch.h>
 #include "chip.h"
@@ -8,7 +7,7 @@
 void acpi_fill_fadt(acpi_fadt_t *fadt)
 {
 	struct device *dev = pcidev_on_root(0x1f, 0);
-	struct southbridge_intel_lynxpoint_config *cfg = dev->chip_info;
+	const pch_config_t *cfg = dev->chip_info;
 	u16 pmbase = get_pmbase();
 
 

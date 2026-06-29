@@ -5,6 +5,7 @@
 
 #define DEFAULT_TBAR		((u8 *)0xfed1b000)
 
+#include <southbridge/intel/common/lpc_def.h> /* IWYU pragma: export */
 #include <southbridge/intel/common/rcba.h> /* IWYU pragma: export */
 
 #define DEFAULT_PMBASE		0x00000500
@@ -27,33 +28,8 @@
 /* D31:F0 LPC bridge */
 #define D31F0_ACPI_CNTL		0x44
 #define ACPI_CNTL		D31F0_ACPI_CNTL
-#define D31F0_GPIO_BASE		0x48
 #define D31F0_GPIO_CNTL		0x4c
-#define D31F0_PIRQA_ROUT	0x60
-#define D31F0_PIRQB_ROUT	0x61
-#define D31F0_PIRQC_ROUT	0x62
-#define D31F0_PIRQD_ROUT	0x63
 #define D31F0_SERIRQ_CNTL	0x64
-#define D31F0_PIRQE_ROUT	0x68
-#define D31F0_PIRQF_ROUT	0x69
-#define D31F0_PIRQG_ROUT	0x6a
-#define D31F0_PIRQH_ROUT	0x6b
-#define D31F0_LPC_IODEC		0x80
-#define D31F0_LPC_EN		0x82
-#define   CNF2_LPC_EN		(1 << 13) /* 0x4e/0x4f */
-#define   CNF1_LPC_EN		(1 << 12) /* 0x2e/0x2f */
-#define   MC_LPC_EN		(1 << 11) /* 0x62/0x66 */
-#define   KBC_LPC_EN		(1 << 10) /* 0x60/0x64 */
-#define   GAMEH_LPC_EN		(1 << 9)  /* 0x208/0x20f */
-#define   GAMEL_LPC_EN		(1 << 8)  /* 0x200/0x207 */
-#define   FDD_LPC_EN		(1 << 3)  /* LPC_IO_DEC[12] */
-#define   LPT_LPC_EN		(1 << 2)  /* LPC_IO_DEC[9:8] */
-#define   COMB_LPC_EN		(1 << 1)  /* LPC_IO_DEC[6:4] */
-#define   COMA_LPC_EN		(1 << 0)  /* LPC_IO_DEC[2:0] */
-#define D31F0_GEN1_DEC		0x84
-#define D31F0_GEN2_DEC		0x88
-#define D31F0_GEN3_DEC		0x8c
-#define D31F0_GEN4_DEC		0x90
 #define D31F0_C5_EXIT_TIMING	0xa8
 #define D31F0_CxSTATE_CNF	0xa9
 #define D31F0_C4TIMING_CNT	0xaa

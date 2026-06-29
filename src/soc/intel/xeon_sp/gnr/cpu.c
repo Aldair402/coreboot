@@ -13,8 +13,6 @@
 
 #include "chip.h"
 
-static const void *microcode_patch;
-
 static const config_t *chip_config = NULL;
 
 bool cpu_soc_is_in_untrusted_mode(void)
@@ -23,9 +21,13 @@ bool cpu_soc_is_in_untrusted_mode(void)
 	return false;
 }
 
-void get_microcode_info(const void **microcode, int *parallel)
+void get_microcode_info(const void **microcode, size_t *size, int *parallel)
 {
-	*microcode = intel_microcode_find();
+	const struct microcode *microcode_file = intel_microcode_find();
+	if (microcode_file != NULL)
+		*size = get_microcode_size(microcode_file);
+
+	*microcode = microcode_file;
 	*parallel = 0;
 }
 
@@ -59,6 +61,9 @@ static const struct cpu_driver driver __cpu_driver = {
  */
 static void pre_mp_init(void)
 {
+	const void *microcode_patch = intel_microcode_find();
+	intel_microcode_load_unlocked(microcode_patch);
+
 	x86_setup_mtrrs_with_detect();
 	x86_mtrr_check();
 }
@@ -88,9 +93,6 @@ void mp_init_cpus(struct bus *bus)
 	 * rest of the CPU devices do not have chip_info updated.
 	 */
 	chip_config = bus->dev->chip_info;
-
-	microcode_patch = intel_microcode_find();
-	intel_microcode_load_unlocked(microcode_patch);
 
 	enum cb_err ret = mp_init_with_smm(bus, &mp_ops);
 	if (ret != CB_SUCCESS)

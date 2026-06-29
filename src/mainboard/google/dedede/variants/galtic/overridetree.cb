@@ -9,6 +9,11 @@ fw_config
 		option AUDIO_CODEC_ALC5682 1
 		option AUDIO_CODEC_ALC5682I_VS 2
 	end
+	field TOUCHPAD_SOURCE 62 63
+		option TOUCHPAD_UNPROVISIONED 0
+		option TOUCHPAD_ELAN0000 1
+		option TOUCHPAD_ELAN2702 2
+	end
 end
 
 chip soc/intel/jasperlake
@@ -69,6 +74,17 @@ chip soc/intel/jasperlake
 	register "tcc_offset" = "8"     # TCC of 97C
 
 	device domain 0 on
+		device ref igpu on
+			chip drivers/gfx/generic
+				register "device_count" = "1"
+				# DDIA for eDP
+				register "device[0].name" = ""LCD0""
+				# Internal panel on the first port of the graphics chip
+				register "device[0].type" = "panel"
+
+				device generic 0 on end
+			end
+		end
 		device ref dptf on
 			# Default DPTF Policy for all Dedede boards if not overridden
 			chip drivers/intel/dptf
@@ -139,15 +155,23 @@ chip soc/intel/jasperlake
 				register "desc" = ""ELAN Touchpad""
 				register "irq" = "ACPI_IRQ_WAKE_EDGE_LOW(GPP_B3_IRQ)"
 				register "wake" = "GPE0_DW0_03"
-				device i2c 15 alias elan0000 on end
+				register "detect" = "1"
+				device i2c 15 on
+					probe TOUCHPAD_SOURCE TOUCHPAD_UNPROVISIONED
+					probe TOUCHPAD_SOURCE TOUCHPAD_ELAN0000
+				end
 			end
 			chip drivers/i2c/hid
 				register "generic.hid" = ""ELAN2702""
 				register "generic.desc" = ""ELAN Touchpad""
 				register "generic.irq" = "ACPI_IRQ_WAKE_LEVEL_LOW(GPP_B3_IRQ)"
 				register "generic.wake" = "GPE0_DW0_03"
+				register "generic.detect" = "1"
 				register "hid_desc_reg_offset" = "0x01"
-				device i2c 15 alias elan2702 on end
+				device i2c 15 on
+					probe TOUCHPAD_SOURCE TOUCHPAD_UNPROVISIONED
+					probe TOUCHPAD_SOURCE TOUCHPAD_ELAN2702
+				end
 			end
 		end
 		device ref i2c2 on

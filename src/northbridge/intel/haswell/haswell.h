@@ -16,6 +16,11 @@
 /* Device 0:0.0 PCI configuration space (Host Bridge) */
 #define HOST_BRIDGE	PCI_DEV(0, 0, 0)
 
+/* Device 0:1.x PCI configuration space (PCI Express Graphics) */
+#define PEG_DEV(func)		PCI_DEV(0, 1, func)
+
+#define MAX_PEG_FUNC		3
+
 /* Device 0:2.0 PCI configuration space (Graphics Device) */
 
 #define MSAC		0x62	/* Multi Size Aperture Control */
@@ -23,16 +28,15 @@
 #define ARCHDIS		0xff0	/* DMA Remap Engine Policy Control */
 #define  DMAR_LCKDN	(1 << 31)
 #define  SPCAPCTRL	(1 << 25)
-#define  L3HIT2PEND_DIS	(1 << 20)
 #define  PRSCAPDIS	(1 << 2)
-#define  GLBIOTLBINV	(1 << 1)
-#define  GLBCTXTINV	(1 << 0)
 
 void mb_late_romstage_setup(void); /* optional */
 
 void haswell_early_initialization(void);
 void haswell_late_initialization(void);
-void haswell_unhide_peg(void);
+
+void northbridge_setup_peg(void);
+void northbridge_unhide_peg(void);
 
 void dmi_early_init(void);
 void peg_dmi_recipe(const bool is_peg, const pci_devfn_t dev);

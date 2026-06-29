@@ -6,6 +6,45 @@
 #include <console/console.h>
 #include <types.h>
 #include "mca_common_defs.h"
+#include "mcax.h"
+
+union mca_bank_ipid {
+	struct {
+		u64 instance_id:32;    /* instance ID of this IP */
+		u64 hardware_id:12;    /* hardware ID of the IP associated with MCA bank */
+		u64 instance_id_hi:4;  /* High value of instance ID */
+		u64 mca_type:16;       /* McaType of MCA bank with this IP */
+	};
+	u64 raw;
+};
+
+#define MCA_UMC_ID                      (0x096)
+
+/* Returns the HardwareID from MSR MCAX_IPID. */
+u16 mcax_bank_hardware_id(unsigned int bank)
+{
+	union mca_bank_ipid ipid;
+	ipid.raw = rdmsr(MCAX_IPID_MSR(bank)).raw;
+	return ipid.hardware_id;
+}
+
+/* Returns the InstanceID from MSR MCAX_IPID. */
+u32 mcax_bank_instance_id(unsigned int bank)
+{
+	union mca_bank_ipid ipid;
+	ipid.raw = rdmsr(MCAX_IPID_MSR(bank)).raw;
+	/* Returns a package unique ID to identify the MCA source.
+	 * Since it does not account for 'instance_id_hi', the ID might not
+	 * be unique across all nodes and cannot be used as global identifier.
+	 */
+	return ipid.instance_id;
+}
+
+/* Return true when the bank is for the UMC */
+bool mcax_bank_is_umc(unsigned int bank)
+{
+	return mcax_bank_hardware_id(bank) == MCA_UMC_ID;
+}
 
 /* The McaXEnable bit in the config registers of the available MCAX banks is already set by the
    FSP, so no need to set it here again. */
@@ -59,4 +98,31 @@ void mca_print_error(unsigned int bank)
 	}
 	msr = rdmsr(MCA_CTL_MASK_MSR(bank));
 	printk(BIOS_WARNING, "   MC%u_CTL_MASK = %08x_%08x\n", bank, msr.hi, msr.lo);
+}
+
+
+/**
+ * Fill in FRU text if from MSR SYND1 and SYND2 if supported.
+ * @param bank     The MCA bank to check
+ * @param fru_text The array to fill
+ *
+ * @return CB_SUCCESS on success
+ */
+enum cb_err amd_mca_fill_fru_from_synd(const int bank, char fru_text[17])
+{
+	msr_t msr = rdmsr(MCAX_CONFIG_MSR(bank));
+
+	if (!(msr.lo & MCAX_CONFIG_MSR_FRU_TEXT))
+		return CB_ERR_NOT_IMPLEMENTED;
+
+	msr = rdmsr(MCAX_SYND1_MSR(bank));
+	if (!msr.raw)
+		return CB_ERR;
+
+	strncpy(&fru_text[0], (char *)&msr.raw, sizeof(msr_t));
+	msr = rdmsr(MCAX_SYND2_MSR(bank));
+	strncpy(&fru_text[8], (char *)&msr.raw, sizeof(msr_t));
+	fru_text[16] = 0;
+
+	return CB_SUCCESS;
 }

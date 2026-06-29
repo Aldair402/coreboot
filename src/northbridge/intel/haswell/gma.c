@@ -1,83 +1,25 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include <commonlib/helpers.h>
 #include <arch/io.h>
-#include <device/mmio.h>
-#include <device/pci_ops.h>
-#include <console/console.h>
 #include <bootmode.h>
+#include <console/console.h>
+#include <commonlib/helpers.h>
+#include <cpu/intel/haswell/haswell.h>
 #include <delay.h>
 #include <device/device.h>
+#include <device/mmio.h>
 #include <device/pci.h>
 #include <device/pci_ids.h>
+#include <device/pci_ops.h>
 #include <drivers/intel/gma/i915_reg.h>
 #include <drivers/intel/gma/i915.h>
 #include <drivers/intel/gma/libgfxinit.h>
-#include <cpu/intel/haswell/haswell.h>
 #include <drivers/intel/gma/opregion.h>
 #include <southbridge/intel/lynxpoint/pch.h>
 #include <types.h>
 
 #include "chip.h"
 #include "haswell.h"
-
-struct gt_reg {
-	u32 reg;
-	u32 andmask;
-	u32 ormask;
-};
-
-static const struct gt_reg haswell_gt_setup[] = {
-	/* Enable Counters */
-	{ 0x0a248, 0x00000000, 0x00000016 },
-	{ 0x0a000, 0x00000000, 0x00070020 },
-	{ 0x0a180, 0xff3fffff, 0x15000000 },
-	/* Enable DOP Clock Gating */
-	{ 0x09424, 0x00000000, 0x000003fd },
-	/* Enable Unit Level Clock Gating */
-	{ 0x09400, 0x00000000, 0x00000080 },
-	{ 0x09404, 0x00000000, 0x40401000 },
-	{ 0x09408, 0x00000000, 0x00000000 },
-	{ 0x0940c, 0x00000000, 0x02000001 },
-	{ 0x0a008, 0x00000000, 0x08000000 },
-	/* Wake Rate Limits */
-	{ 0x0a090, 0xffffffff, 0x00000000 },
-	{ 0x0a098, 0xffffffff, 0x03e80000 },
-	{ 0x0a09c, 0xffffffff, 0x00280000 },
-	{ 0x0a0a8, 0xffffffff, 0x0001e848 },
-	{ 0x0a0ac, 0xffffffff, 0x00000019 },
-	/* Render/Video/Blitter Idle Max Count */
-	{ 0x02054, 0x00000000, 0x0000000a },
-	{ 0x12054, 0x00000000, 0x0000000a },
-	{ 0x22054, 0x00000000, 0x0000000a },
-	/* RC Sleep / RCx Thresholds */
-	{ 0x0a0b0, 0xffffffff, 0x00000000 },
-	{ 0x0a0b4, 0xffffffff, 0x000003e8 },
-	{ 0x0a0b8, 0xffffffff, 0x0000c350 },
-	/* RP Settings */
-	{ 0x0a010, 0xffffffff, 0x000f4240 },
-	{ 0x0a014, 0xffffffff, 0x12060000 },
-	{ 0x0a02c, 0xffffffff, 0x0000e808 },
-	{ 0x0a030, 0xffffffff, 0x0003bd08 },
-	{ 0x0a068, 0xffffffff, 0x000101d0 },
-	{ 0x0a06c, 0xffffffff, 0x00055730 },
-	{ 0x0a070, 0xffffffff, 0x0000000a },
-	/* RP Control */
-	{ 0x0a024, 0x00000000, 0x00000b92 },
-	/* HW RC6 Control */
-	{ 0x0a090, 0x00000000, 0x88040000 },
-	/* Video Frequency Request */
-	{ 0x0a00c, 0x00000000, 0x08000000 },
-	{ 0 },
-};
-
-static const struct gt_reg haswell_gt_lock[] = {
-	{ 0x0a248, 0xffffffff, 0x80000000 },
-	{ 0x0a004, 0xffffffff, 0x00000010 },
-	{ 0x0a080, 0xffffffff, 0x00000004 },
-	{ 0x0a180, 0xffffffff, 0x80000000 },
-	{ 0 },
-};
 
 /*
  * Some VGA option roms are used for several chipsets but they only have one PCI ID in their
@@ -89,30 +31,39 @@ u32 map_oprom_vendev(u32 vendev)
 	u32 new_vendev = vendev;
 
 	switch (vendev) {
-	case 0x80860402:		/* GT1 Desktop */
-	case 0x80860406:		/* GT1 Mobile */
-	case 0x8086040a:		/* GT1 Server */
-	case 0x80860a06:		/* GT1 ULT */
-	case 0x80860a0e:		/* GT1 ULX */
+	case 0x80860402:		/* HSW GT1 Desktop */
+	case 0x80860406:		/* HSW GT1 Mobile */
+	case 0x8086040a:		/* HSW GT1 Server */
+	case 0x80860a06:		/* HSW GT1 ULT */
+	case 0x80860a0e:		/* HSW GT1 ULX */
 
-	case 0x80860412:		/* GT2 Desktop */
-	case 0x80860416:		/* GT2 Mobile */
-	case 0x8086041a:		/* GT2 Server */
-	case 0x8086041e:		/* GT1.5 Desktop */
-	case 0x80860a16:		/* GT2 ULT */
-	case 0x80860a1e:		/* GT2 ULX */
+	case 0x80860412:		/* HSW GT2 Desktop */
+	case 0x80860416:		/* HSW GT2 Mobile */
+	case 0x8086041a:		/* HSW GT2 Server */
+	case 0x8086041e:		/* HSW GT1.5 Desktop */
+	case 0x80860a16:		/* HSW GT2 ULT */
+	case 0x80860a1e:		/* HSW GT2 ULX */
 
-	case 0x80860422:		/* GT3 Desktop */
-	case 0x80860426:		/* GT3 Mobile */
-	case 0x8086042a:		/* GT3 Server */
-	case 0x80860a26:		/* GT3 ULT */
+	case 0x80860422:		/* HSW GT3 Desktop */
+	case 0x80860426:		/* HSW GT3 Mobile */
+	case 0x8086042a:		/* HSW GT3 Server */
+	case 0x80860a26:		/* HSW GT3 ULT */
 
-	case 0x80860d22:		/* GT3e Desktop */
-	case 0x80860d16:		/* GT1 Mobile 4+3 */
-	case 0x80860d26:		/* GT2 Mobile 4+3, GT3e Mobile */
-	case 0x80860d36:		/* GT3 Mobile 4+3 */
+	case 0x80860d22:		/* HSW GT3e Desktop */
+	case 0x80860d16:		/* HSW GT1 Mobile 4+3 */
+	case 0x80860d26:		/* HSW GT2 Mobile 4+3, GT3e Mobile */
+	case 0x80860d36:		/* HSW GT3 Mobile 4+3 */
 
-		new_vendev = 0x80860406;	/* GT1 Mobile */
+	case 0x80861612:		/* BDW Halo GT2 */
+	case 0x80861622:		/* BDW Halo/Desktop GT3 */
+
+	case 0x80861606:		/* BDW ULT GT1 */
+	case 0x80861616:		/* BDW ULT GT2 */
+	case 0x80861626:		/* BDW ULT GT3 15W */
+	case 0x8086162b:		/* BDW ULT GT3 28W */
+	case 0x8086161e:		/* BDW ULX GT2 */
+
+		new_vendev = 0x80860406;	/* HSW GT1 Mobile */
 		break;
 	}
 
@@ -141,14 +92,9 @@ static inline void gtt_rmw(u32 reg, u32 andmask, u32 ormask)
 	gtt_write(reg, val);
 }
 
-static inline void gtt_write_regs(const struct gt_reg *gt)
+static inline void gtt_or(u32 reg, u32 ormask)
 {
-	for (; gt && gt->reg; gt++) {
-		if (gt->andmask)
-			gtt_rmw(gt->reg, gt->andmask, gt->ormask);
-		else
-			gtt_write(gt->reg, gt->ormask);
-	}
+	gtt_rmw(reg, ~0ul, ormask);
 }
 
 #define GTT_RETRY 1000
@@ -169,45 +115,88 @@ int gtt_poll(u32 reg, u32 mask, u32 value)
 	return 0;
 }
 
-static void power_well_enable(void)
+static int gtt_pcode_write(u32 mbox, u32 val)
 {
-	gtt_write(HSW_PWR_WELL_CTL1, HSW_PWR_WELL_ENABLE);
-	gtt_poll(HSW_PWR_WELL_CTL1, HSW_PWR_WELL_STATE, HSW_PWR_WELL_STATE);
+	if (!gtt_poll(GEN6_PCODE_MAILBOX, GEN6_PCODE_READY, 0))
+		return 0;
+
+	gtt_write(GEN6_PCODE_DATA, val);
+	gtt_write(GEN6_PCODE_DATA1, 0);
+	gtt_write(GEN6_PCODE_MAILBOX, GEN6_PCODE_READY | mbox);
+
+	return gtt_poll(GEN6_PCODE_MAILBOX, GEN6_PCODE_READY, 0);
 }
 
-static void gma_pm_init_pre_vbios(struct device *dev)
+static void gma_pm_init_haswell(void)
 {
 	printk(BIOS_DEBUG, "GT Power Management Init\n");
 
-	gtt_res = probe_resource(dev, PCI_BASE_ADDRESS_0);
-	if (!gtt_res || !gtt_res->base)
-		return;
-
-	power_well_enable();
-
-	/*
-	 * Enable RC6
-	 */
+	/* Note: we unconditionally enable Render Standby */
 
 	/* Enable Force Wake */
-	gtt_write(0x0a180, 1 << 5);
-	gtt_write(0x0a188, 0x00010001);
+	gtt_or(0xa180, 1 << 5);
+	gtt_write(0xa188, 0x00010001);
 	gtt_poll(FORCEWAKE_ACK_HSW, 1 << 0, 1 << 0);
 
-	/* GT Settings */
-	gtt_write_regs(haswell_gt_setup);
+	/* Enable counters except Power Meter */
+	gtt_write(0xa248, 0x00000016);
 
-	/* Wait for Mailbox Ready */
-	gtt_poll(0x138124, (1 << 31), (0 << 31));
+	/* GFXPAUSE settings (C0 and later) */
+	gtt_write(0xa000, 0x00070020);
 
-	/* Mailbox Data - RC6 VIDS */
-	gtt_write(0x138128, 0x00000000);
+	/* ECO settings (C0 and later), Render Standby */
+	gtt_rmw(0xa180, 0xff3fffff, 0x15000000);
 
-	/* Mailbox Command */
-	gtt_write(0x138124, 0x80000004);
+	/* Enable DOP Clock Gating */
+	gtt_write(0x9424, 0x000003fd);
 
-	/* Wait for Mailbox Ready */
-	gtt_poll(0x138124, (1 << 31), (0 << 31));
+	/* Enable Unit Level Clock Gating */
+	gtt_write(0x9400, 0x00000080);
+	gtt_write(0x9404, 0x40401000);
+	gtt_write(0x9408, 0x00000000);
+	gtt_write(0x940c, 0x02000001);
+
+	/* Set RP1 graphics frequency */
+	gtt_write(0xa008, 0x08000000);
+
+	/* Wake Rate Limits */
+	gtt_write(0xa090, 0x00000000);
+	gtt_write(0xa098, 0x03e80000);
+	gtt_write(0xa09c, 0x00280000);
+	gtt_write(0xa0a8, 0x0001e848);
+	gtt_write(0xa0ac, 0x00000019);
+
+	/* Render/Video/Blitter Idle Max Count */
+	gtt_write(0x02054, 0x0000000a);
+	gtt_write(0x12054, 0x0000000a);
+	gtt_write(0x22054, 0x0000000a);
+	gtt_write(0x1a054, 0x0000000a);
+
+	/* RC Sleep / RCx Thresholds */
+	gtt_write(0xa0b0, 0x00000000);
+	gtt_write(0xa0b4, 0x000003e8);
+	gtt_write(0xa0b8, 0x0000c350);
+
+	/* RP Settings */
+	gtt_write(0xa010, 0x000f4240);
+	gtt_write(0xa014, 0x12060000);
+	gtt_write(0xa02c, 0x0000e808);
+	gtt_write(0xa030, 0x0003bd08);
+	gtt_write(0xa068, 0x000101d0);
+	gtt_write(0xa06c, 0x00055730);
+	gtt_write(0xa070, 0x0000000a);
+
+	/* RP Control */
+	gtt_write(0xa024, 0x00000b92);
+
+	/* HW RC6 Control */
+	gtt_write(0xa090, 0x88040000);
+
+	/* Video Frequency Request */
+	gtt_write(0xa00c, 0x08000000);
+
+	/* Set RC6 VIDs */
+	gtt_pcode_write(GEN6_PCODE_WRITE_RC6VIDS, 0);
 
 	/* Enable PM Interrupts */
 	gtt_write(GEN6_PMIER, GEN6_PM_MBOX_EVENT | GEN6_PM_THERMAL_EVENT |
@@ -216,30 +205,111 @@ static void gma_pm_init_pre_vbios(struct device *dev)
 		  GEN6_PM_RP_DOWN_EI_EXPIRED);
 
 	/* Enable RC6 in idle */
-	gtt_write(0x0a094, 0x00040000);
+	gtt_write(0xa094, 0x00040000);
 
 	/* PM Lock Settings */
-	gtt_write_regs(haswell_gt_lock);
+	gtt_or(0xa248, 1ul << 31);
+	gtt_or(0xa004, 1 << 4);
+	gtt_or(0xa080, 1 << 2);
+	gtt_or(0xa180, 1ul << 31);
 }
 
-static void init_display_planes(void)
+static u8 systemagent_revision(void)
 {
-	int pipe, plane;
+	return pci_read_config8(pcidev_on_root(0, 0), PCI_REVISION_ID);
+}
 
-	/* Disable cursor mode */
-	for (pipe = PIPE_A; pipe <= PIPE_C; pipe++) {
-		gtt_write(CURCNTR_IVB(pipe), CURSOR_MODE_DISABLE);
-		gtt_write(CURBASE_IVB(pipe), 0x00000000);
+static void gma_pm_init_broadwell(void)
+{
+	printk(BIOS_DEBUG, "GT Power Management Init\n");
+
+	/* Note: we unconditionally enable Render Standby */
+
+	/* Enable Force Wake */
+	gtt_write(0xa188, 0x00010001);
+	gtt_poll(FORCEWAKE_ACK_HSW, 1 << 0, 1 << 0);
+
+	/* Enable push bus metric control and shift */
+	gtt_write(0xa248, 0x00000004);
+	gtt_write(0xa250, 0x000000ff);
+	gtt_write(0xa25c, 0x00000010);
+
+	/* Set GFXPAUSE based on stepping */
+	if (cpu_stepping() <= (CPUID_BROADWELL_ULT_E0 & 0xf) &&
+		haswell_is_ult() && systemagent_revision() <= 9) {
+		gtt_write(0xa000, 0x300ff);
+	} else {
+		gtt_write(0xa000, 0x30020);
 	}
 
-	/* Disable primary plane and set surface base address */
-	for (plane = PLANE_A; plane <= PLANE_C; plane++) {
-		gtt_write(DSPCNTR(plane), DISPLAY_PLANE_DISABLE);
-		gtt_write(DSPSURF(plane), 0x00000000);
-	}
+	/* ECO settings */
+	gtt_write(0xa180, 0x45200000);
 
-	/* Disable VGA display */
-	gtt_write(CPU_VGACNTRL, CPU_VGA_DISABLE);
+	/* Enable DOP Clock Gating */
+	gtt_write(0x9424, 0x000000fd);
+
+	/* Enable Unit Level Clock Gating */
+	gtt_write(0x9400, 0x00000000);
+	gtt_write(0x9404, 0x40401000);
+	gtt_write(0x9408, 0x00000000);
+	gtt_write(0x940c, 0x02000001);
+	gtt_write(0x1a054, 0x0000000a);
+
+	/* Set RP1 graphics frequency */
+	const u32 rp1_gfx_freq = (mchbar_read32(0x5998) >> 8) & 0xff;
+	gtt_write(0xa008, rp1_gfx_freq << 24);
+
+	/* Video Frequency Request */
+	gtt_write(0xa00c, 0x08000000);
+
+	gtt_write(0x138158, 0x00000009);
+	gtt_write(0x13815c, 0x0000000d);
+
+	/* Wake Rate Limits */
+	gtt_write(0xa090, 0x00000000);
+	gtt_write(0xa098, 0x03e80000);
+	gtt_write(0xa09c, 0x00280000);
+	gtt_write(0xa0a8, 0x0001e848);
+	gtt_write(0xa0ac, 0x00000019);
+
+	/* Render/Video/Blitter Idle Max Count */
+	gtt_write(0x02054, 0x0000000a);
+	gtt_write(0x12054, 0x0000000a);
+	gtt_write(0x22054, 0x0000000a);
+
+	/* RC Sleep / RCx Thresholds */
+	gtt_write(0xa0b0, 0x00000000);
+	gtt_write(0xa0b8, 0x00000271);
+
+	/* RP Settings */
+	gtt_write(0xa010, 0x000f4240);
+	gtt_write(0xa014, 0x12060000);
+	gtt_write(0xa02c, 0x0000e808);
+	gtt_write(0xa030, 0x0003bd08);
+	gtt_write(0xa068, 0x000101d0);
+	gtt_write(0xa06c, 0x00055730);
+	gtt_write(0xa070, 0x0000000a);
+	gtt_write(0xa168, 0x00000006);
+
+	/* RP Control */
+	gtt_write(0xa024, 0x00000b92);
+
+	/* HW RC6 Control */
+	gtt_write(0xa090, 0x90040000);
+
+	/* Set RC6 VIDs */
+	gtt_pcode_write(GEN6_PCODE_WRITE_RC6VIDS, 0);
+
+	/* Enable PM Interrupts */
+	gtt_write(0x4402c, 0x03000076);
+
+	/* Enable RC6 in idle */
+	gtt_write(0xa094, 0x00040000);
+
+	/* PM Lock Settings */
+	gtt_or(0xa248, 1ul << 31);
+	gtt_or(0xa000, 1 << 18);
+	gtt_or(0xa180, 1ul << 31);
 }
 
 static void gma_setup_panel(struct device *dev)
@@ -316,11 +386,6 @@ static void gma_setup_panel(struct device *dev)
 			BLM_PCH_OVERRIDE_ENABLE | BLM_PCH_PWM_ENABLE);
 	}
 
-	/* Get display,pipeline,and DDI registers into a basic sane state */
-	power_well_enable();
-
-	init_display_planes();
-
 	/*
 	 * DDI-A params set:
 	 * bit 0: Display detected (RO)
@@ -331,74 +396,183 @@ static void gma_setup_panel(struct device *dev)
 	if (!conf->gpu_ddi_e_connected)
 		reg32 |= DDI_A_4_LANES;
 	gtt_write(DDI_BUF_CTL_A, reg32);
-
-	/* Set FDI registers - is this required? */
-	gtt_write(_FDI_RXA_MISC, 0x00200090);
-	gtt_write(_FDI_RXA_MISC, 0x0a000000);
-
-	/* Enable the handshake with PCH display when processing reset */
-	gtt_write(NDE_RSTWRN_OPT, RST_PCH_HNDSHK_EN);
-
-	/* Undocumented */
-	gtt_write(0x42090, 0x04000000);
-	gtt_write(0x9840,  0x00000000);
-	gtt_write(0x42090, 0xa4000000);
-
-	gtt_write(SOUTH_DSPCLK_GATE_D, PCH_LP_PARTITION_LEVEL_DISABLE);
-
-	/* Undocumented */
-	gtt_write(0x42080, 0x00004000);
-
-	/* Prepare DDI buffers for DP and FDI */
-	intel_prepare_ddi();
-
-	/* Hot plug detect buffer enabled for port A */
-	gtt_write(DIGITAL_PORT_HOTPLUG_CNTRL, DIGITAL_PORTA_HOTPLUG_ENABLE);
-
-	/* Enable HPD buffer for digital port D and B */
-	gtt_write(PCH_PORT_HOTPLUG, PORTD_HOTPLUG_ENABLE | PORTB_HOTPLUG_ENABLE);
-
-	/*
-	 * Bits 4:0 - Power cycle delay (default 0x6 --> 500ms)
-	 * Bits 31:8 - Reference divider (0x0004af ----> 24MHz)
-	 */
-	gtt_write(PCH_PP_DIVISOR, 0x0004af06);
 }
 
-static void gma_pm_init_post_vbios(struct device *dev)
+enum gpu_type {
+	GPU_TYPE_ULX,
+	GPU_TYPE_ULT,
+	GPU_TYPE_TRAD,
+};
+
+static enum gpu_type get_gpu_type(struct device *dev)
 {
-	int cdclk = 0;
-	int devid = pci_read_config16(dev, PCI_DEVICE_ID);
-	int gpu_is_ulx = 0;
+	if (haswell_is_ult()) {
+		const u16 devid = pci_read_config16(dev, PCI_DEVICE_ID);
+		switch (devid) {
+		case 0x0a0e:
+		case 0x0a1e:
+		case 0x161e:
+			return GPU_TYPE_ULX;
+		default:
+			return GPU_TYPE_ULT;
+		}
+	} else {
+		return GPU_TYPE_TRAD;
+	}
+}
 
-	if (devid == 0x0a0e || devid == 0x0a1e)
-		gpu_is_ulx = 1;
+enum gt_cdclk {
+	GT_CDCLK_DEFAULT = 0,
+	GT_CDCLK_337,
+	GT_CDCLK_450,
+	GT_CDCLK_540,
+	GT_CDCLK_675,
+};
 
-	/* CD Frequency */
-	if ((gtt_read(0x42014) & 0x1000000) || gpu_is_ulx || haswell_is_ult())
-		cdclk = 0; /* fixed frequency */
-	else
-		cdclk = 2; /* variable frequency */
+static enum gt_cdclk get_cdclk(bool is_broadwell, enum gpu_type type)
+{
+	/* TODO: Make this a config option? */
+	enum gt_cdclk cdclk = GT_CDCLK_DEFAULT;
 
-	if (gpu_is_ulx || cdclk != 0)
-		gtt_rmw(0x130040, 0xf7ffffff, 0x04000000);
-	else
-		gtt_rmw(0x130040, 0xf3ffffff, 0x00000000);
+	/* If CDCLK frequency selection is not supported, 450 MHz is forced */
+	if (gtt_read(HSW_FUSE_STRAP) & HSW_CDCLK_LIMIT)
+		return GT_CDCLK_450;
 
-	/* More magic */
-	if (haswell_is_ult() || gpu_is_ulx) {
-		if (!gpu_is_ulx)
-			gtt_write(0x138128, 0x00000000);
-		else
-			gtt_write(0x138128, 0x00000001);
-		gtt_write(0x13812c, 0x00000000);
-		gtt_write(0x138124, 0x80000017);
+	/*
+	 * BDW ULT/ULX requires extra cooling to run at the highest frequency
+	 * TODO: Make this a devicetree setting?
+	 */
+	const bool bdw_ult_high_power = false;
+
+	enum gt_cdclk lower_cdclk;
+	enum gt_cdclk upper_cdclk;
+	switch (type) {
+	case GPU_TYPE_ULX:
+		if (is_broadwell) {
+			lower_cdclk = GT_CDCLK_337;
+			upper_cdclk = bdw_ult_high_power ? GT_CDCLK_540 : GT_CDCLK_450;
+		} else {
+			lower_cdclk = GT_CDCLK_337;
+			upper_cdclk = GT_CDCLK_450;
+		}
+		break;
+	case GPU_TYPE_ULT:
+		if (is_broadwell) {
+			lower_cdclk = GT_CDCLK_337;
+			upper_cdclk = bdw_ult_high_power ? GT_CDCLK_675 : GT_CDCLK_540;
+		} else {
+			lower_cdclk = GT_CDCLK_450;
+			upper_cdclk = GT_CDCLK_450;
+		}
+		break;
+	case GPU_TYPE_TRAD:
+		if (is_broadwell) {
+			lower_cdclk = GT_CDCLK_337;
+			upper_cdclk = GT_CDCLK_675;
+		} else {
+			lower_cdclk = GT_CDCLK_450;
+			upper_cdclk = GT_CDCLK_540;
+		}
+		break;
+	default:
+		lower_cdclk = GT_CDCLK_450;
+		upper_cdclk = GT_CDCLK_450;
+		break;
 	}
 
+	if (cdclk == GT_CDCLK_DEFAULT)
+		cdclk = upper_cdclk;
+
+	/* Clamp CDCLK to supported range */
+	return MAX(lower_cdclk, MIN(cdclk, upper_cdclk));
+}
+
+static u32 cdsel_from_cdclk(bool is_broadwell, enum gt_cdclk cdclk)
+{
+	if (!is_broadwell)
+		return cdclk != GT_CDCLK_450;
+
+	switch (cdclk) {
+		default:
+		case GT_CDCLK_450: return 0;
+		case GT_CDCLK_540: return 1;
+		case GT_CDCLK_337: return 2;
+		case GT_CDCLK_675: return 3;
+	}
+}
+
+#define HSW_PCODE_DE_WRITE_FREQ_REQ		0x17
+#define BDW_PCODE_DISPLAY_FREQ_CHANGE_REQ	0x18
+
+static void gma_cdclk_init(struct device *dev, bool is_broadwell)
+{
+	if (is_broadwell) {
+		/* Inform power controller of upcoming frequency change */
+		if (!gtt_pcode_write(BDW_PCODE_DISPLAY_FREQ_CHANGE_REQ, 0)) {
+			printk(BIOS_ERR, "Failed to inform pcode about cdclk change\n");
+			return;
+		}
+	}
+
+	const enum gpu_type type = get_gpu_type(dev);
+	const enum gt_cdclk cdclk = get_cdclk(is_broadwell, type);
+
+	assert(cdclk >= GT_CDCLK_337);
+
+	const u32 cdsel = cdsel_from_cdclk(is_broadwell, cdclk);
+
+	/*
+	 * Set CD Clock Frequency Select
+	 * TODO: For BDW, should we switch CDCLK source to FCLK before
+	 * updating the CDCLK frequency selector, or is it a non-issue
+	 * when done so early?
+	 */
+	gtt_rmw(LCPLL_CTL, ~LCPLL_CLK_FREQ_MASK, cdsel << 26);
+
+	if (is_broadwell || type == GPU_TYPE_ULX) {
+		/* Inform power controller of selected frequency */
+		gtt_pcode_write(HSW_PCODE_DE_WRITE_FREQ_REQ, cdsel);
+	}
+
+	if (is_broadwell) {
+		u32 cdval, dpdiv;
+		switch (cdclk) {
+		case GT_CDCLK_337:
+			cdval = 337;
+			dpdiv = 169;
+			break;
+		case GT_CDCLK_450:
+			cdval = 449;
+			dpdiv = 225;
+			break;
+		case GT_CDCLK_540:
+			cdval = 539;
+			dpdiv = 270;
+			break;
+		case GT_CDCLK_675:
+			cdval = 674;
+			dpdiv = 338;
+			break;
+		default:
+			return;
+		}
+
+		/* Program CD Clock Frequency */
+		gtt_rmw(0x46200, 0xfffffc00, cdval);
+
+		/* Set CPU DP AUX 2X bit clock dividers */
+		gtt_rmw(0x64010, 0xfffff800, dpdiv);
+		gtt_rmw(0x64810, 0xfffff800, dpdiv);
+	}
+}
+
+static void gma_pm_init_post_vbios(bool is_broadwell)
+{
 	/* Disable Force Wake */
-	gtt_write(0x0a188, 0x00010000);
+	gtt_write(0xa188, 0x00010000);
 	gtt_poll(FORCEWAKE_ACK_HSW, 1 << 0, 0 << 0);
-	gtt_write(0x0a188, 0x00000001);
+	if (!is_broadwell)
+		gtt_write(0xa188, 0x00000001);
 }
 
 /* Enable SCI to ACPI _GPE._L06 */
@@ -417,15 +591,30 @@ static void gma_enable_swsci(void)
 
 static void gma_func0_init(struct device *dev)
 {
+	const bool is_broadwell = cpu_is_broadwell();
+
 	int lightup_ok = 0;
 
 	intel_gma_init_igd_opregion();
 
+	gtt_res = probe_resource(dev, PCI_BASE_ADDRESS_0);
+	if (!gtt_res || !gtt_res->base)
+		return;
+
 	/* Init graphics power management */
-	gma_pm_init_pre_vbios(dev);
+	if (is_broadwell)
+		gma_pm_init_broadwell();
+	else
+		gma_pm_init_haswell();
+
+	/* Enable power well for DP and Audio */
+	gtt_write(HSW_PWR_WELL_CTL1, HSW_PWR_WELL_ENABLE);
+	gtt_poll(HSW_PWR_WELL_CTL1, HSW_PWR_WELL_STATE, HSW_PWR_WELL_STATE);
 
 	/* Pre panel init */
 	gma_setup_panel(dev);
+
+	gma_cdclk_init(dev, is_broadwell);
 
 	if (!CONFIG(NO_GFX_INIT))
 		pci_or_config16(dev, PCI_COMMAND, PCI_COMMAND_MASTER);
@@ -450,7 +639,7 @@ static void gma_func0_init(struct device *dev)
 
 	printk(BIOS_DEBUG, "GT Power Management Init (post VBIOS)\n");
 
-	gma_pm_init_post_vbios(dev);
+	gma_pm_init_post_vbios(is_broadwell);
 
 	gma_enable_swsci();
 }
@@ -479,29 +668,36 @@ static struct device_operations gma_func0_ops = {
 };
 
 static const unsigned short pci_device_ids[] = {
-	0x0402, /* Desktop GT1 */
-	0x0412, /* Desktop GT2 */
-	0x041e, /* Desktop GT1.5 */
-	0x0422, /* Desktop GT3 */
-	0x0d22, /* Desktop GT3e */
-	0x0406, /* Mobile GT1 */
-	0x0416, /* Mobile GT2 */
-	0x0426, /* Mobile GT3 */
-	0x040a, /* Server GT1 */
-	0x041a, /* Server GT2 */
-	0x042a, /* Server GT3 */
-	0x0d16, /* Mobile 4+3 GT1 */
-	0x0d26, /* Mobile 4+3 GT2, Mobile GT3e */
-	0x0d36, /* Mobile 4+3 GT3 */
-	0x0a06, /* ULT GT1 */
-	0x0a16, /* ULT GT2 */
-	0x0a26, /* ULT GT3 */
-	0x0a0e, /* ULX GT1 */
-	0x0a1e, /* ULX GT2 */
+	0x0402, /* HSW Desktop GT1 */
+	0x0412, /* HSW Desktop GT2 */
+	0x041e, /* HSW Desktop GT1.5 */
+	0x0422, /* HSW Desktop GT3 */
+	0x0d22, /* HSW Desktop GT3e */
+	0x0406, /* HSW Mobile GT1 */
+	0x0416, /* HSW Mobile GT2 */
+	0x0426, /* HSW Mobile GT3 */
+	0x040a, /* HSW Server GT1 */
+	0x041a, /* HSW Server GT2 */
+	0x042a, /* HSW Server GT3 */
+	0x0d16, /* HSW Mobile 4+3 GT1 */
+	0x0d26, /* HSW Mobile 4+3 GT2, Mobile GT3e */
+	0x0d36, /* HSW Mobile 4+3 GT3 */
+	0x0a06, /* HSW ULT GT1 */
+	0x0a16, /* HSW ULT GT2 */
+	0x0a26, /* HSW ULT GT3 */
+	0x0a0e, /* HSW ULX GT1 */
+	0x0a1e, /* HSW ULX GT2 */
+	0x1612, /* BDW Halo GT2 */
+	0x1622, /* BDW Halo/Desktop GT3 */
+	0x1606, /* BDW ULT GT1 */
+	0x1616, /* BDW ULT GT2 */
+	0x1626, /* BDW ULT GT3 15W */
+	0x162b, /* BDW ULT GT3 28W */
+	0x161e, /* BDW ULX GT2 */
 	0,
 };
 
-static const struct pci_driver pch_lpc __pci_driver = {
+static const struct pci_driver gma_func0_driver __pci_driver = {
 	.ops     = &gma_func0_ops,
 	.vendor  = PCI_VID_INTEL,
 	.devices = pci_device_ids,

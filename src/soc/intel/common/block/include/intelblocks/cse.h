@@ -4,6 +4,7 @@
 #define SOC_INTEL_COMMON_CSE_H
 
 #include <intelblocks/cse_telemetry.h>
+#include <option.h>
 #include <types.h>
 #include <vb2_api.h>
 
@@ -77,9 +78,6 @@ enum me_fw_sku {
 	ME_HFS3_FW_SKU_CORPORATE = 0x3,
 	ME_HFS3_FW_SKU_LITE	 = 0x5,
 };
-
-/* Number of cse boot performance data */
-#define NUM_CSE_BOOT_PERF_DATA	64
 
 /* PSR_HECI_FW_DOWNGRADE_BACKUP Command */
 #define PSR_HECI_FW_DOWNGRADE_BACKUP 0x3
@@ -301,6 +299,7 @@ enum csme_failure_reason {
 	CSE_LITE_SKU_PART_UPDATE_SUCCESS = 18,
 };
 
+#if CONFIG(SOC_INTEL_CSE_PRE_CPU_RESET_TELEMETRY)
 /* CSE boot performance data */
 struct cse_boot_perf_rsp {
 	struct mkhi_hdr hdr;
@@ -314,6 +313,7 @@ struct cse_boot_perf_rsp {
 	/* Boot performance data */
 	uint32_t timestamp[NUM_CSE_BOOT_PERF_DATA];
 } __packed;
+#endif
 
 /*
  * Initialize the CSE device.
@@ -486,6 +486,28 @@ bool cse_is_hfs1_com_secover_mei_msg(void);
 bool cse_is_hfs1_com_soft_temp_disable(void);
 
 /*
+ * Check whether ME/CSME is operational (HFSTS1 current working state and
+ * operation mode are both normal).
+ */
+bool cse_is_me_operational(void);
+
+#if ENV_RAMSTAGE
+/*
+ * Check whether ME/CSME is requested enabled via the `me_state` option.
+ * Returns true when `me_state` is 0 ("Enabled") and false when it is 1
+ * ("Disabled").
+ */
+bool cse_is_me_state_requested_enabled(void);
+
+/*
+ * Check whether ME/CSME is both requested enabled and operational.
+ */
+bool cse_is_me_enabled(void);
+#else
+static inline bool cse_is_me_state_requested_enabled(void) { return true; }
+#endif
+
+/*
  * Checks CSE's spi protection mode is protected or unprotected.
  * Returns true if CSE's spi protection mode is protected, otherwise false.
  */
@@ -542,7 +564,9 @@ bool skip_cse_sub_part_update(void);
  * This command retrieves a set of boot performance timestamps CSME collected during
  * the last platform boot flow.
  */
+#if CONFIG(SOC_INTEL_CSE_PRE_CPU_RESET_TELEMETRY)
 enum cb_err cse_get_boot_performance_data(struct cse_boot_perf_rsp *boot_perf);
+#endif
 
 /* Function to make cse disable using PMC IPC */
 bool cse_disable_mei_devices(void);
@@ -642,5 +666,15 @@ bool is_cse_boot_to_rw(void);
  * Returns true if the host came out of a cold reset, false otherwise.
  */
 bool cse_check_host_cold_reset(void);
+
+/*
+ * Effective DISABLE_HECI1_AT_PRE_BOOT: Kconfig default with optional CFR/CMOS
+ * override (option name disable_heci1_at_pre_boot).
+ */
+static inline bool soc_disable_heci1_at_pre_boot(void)
+{
+	return get_uint_option("disable_heci1_at_pre_boot",
+			       CONFIG(DISABLE_HECI1_AT_PRE_BOOT)) != 0;
+}
 
 #endif // SOC_INTEL_COMMON_CSE_H

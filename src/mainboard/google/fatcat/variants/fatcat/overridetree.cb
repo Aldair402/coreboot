@@ -36,8 +36,8 @@ fw_config
 	end
 	field SD 13 14
 		option SD_NONE			0
-		option SD_GENSYS		1
-		option SD_BAYHUB		2
+		option SD_GENSYS		1	# use pin B17 as PRSNT2#
+		option SD_BAYHUB		2	# use pin B17 as ClkReq#
 	end
 	field STORAGE 15 16
 		option STORAGE_UNKNOWN		0
@@ -132,8 +132,8 @@ chip soc/intel/pantherlake
 	#| I2C5              | Touchpad                  |
 	#+-------------------+---------------------------+
 	register "common_soc_config" = "{
-		/* Render OEM footer logo 100px above from the edge */
-		.logo_bottom_margin = 100,
+		/* Render OEM footer logo 200px above from the edge */
+		.logo_bottom_margin = 200,
 		.chipset_lockdown = CHIPSET_LOCKDOWN_COREBOOT,
 		.i2c[1] = {
 			.speed = I2C_SPEED_FAST,
@@ -602,6 +602,10 @@ chip soc/intel/pantherlake
 			register "pcie_rp[PCIE_RP(3)]" = "{
 				.clk_src = 2,
 				.clk_req = 2,
+				/*
+				 * NOTE: The clock usage flag is changed to
+				 * PCIE_RP_CLK_REQ_UNUSED in variant.c when PRSNT#2 is used.
+				 */
 				.flags = PCIE_RP_CLK_REQ_DETECT | PCIE_RP_LTR | PCIE_RP_AER,
 			}"
 			chip soc/intel/common/block/pcie/rtd3
@@ -632,7 +636,7 @@ chip soc/intel/pantherlake
 			chip drivers/wifi/generic
 				register "add_acpi_dma_property" = "true"
 				register "wake" = "GPE0_DW0_12" # GPP_A12
-				use usb2_port7 as bluetooth_companion
+				use usb2_port8 as bluetooth_companion
 				device pci 00.0 on
 					probe WIFI WIFI_PCIE_6
 					probe WIFI WIFI_PCIE_7

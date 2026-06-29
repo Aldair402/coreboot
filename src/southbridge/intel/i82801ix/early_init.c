@@ -3,6 +3,7 @@
 #include <arch/io.h>
 #include <device/pci_ops.h>
 #include <device/smbus_host.h>
+#include <southbridge/intel/common/lpc_def.h>
 #include <southbridge/intel/common/pmutil.h>
 #include "i82801ix.h"
 #include "chip.h"
@@ -26,8 +27,8 @@ void i82801ix_lpc_setup(void)
 	 * - 0x208-0x20f GAMEH
 	 * - 0x200-0x207 GAMEL
 	 */
-	pci_write_config16(d31f0, D31F0_LPC_IODEC, 0x0010);
-	pci_write_config16(d31f0, D31F0_LPC_EN, CNF2_LPC_EN | CNF1_LPC_EN
+	pci_write_config16(d31f0, LPC_IO_DEC, 0x0010);
+	pci_write_config16(d31f0, LPC_EN, CNF2_LPC_EN | CNF1_LPC_EN
 			   | MC_LPC_EN | KBC_LPC_EN | GAMEH_LPC_EN
 			   | GAMEL_LPC_EN | FDD_LPC_EN | LPT_LPC_EN
 			   | COMB_LPC_EN | COMA_LPC_EN);
@@ -37,10 +38,10 @@ void i82801ix_lpc_setup(void)
 		return;
 	config = dev->chip_info;
 
-	pci_write_config32(d31f0, D31F0_GEN1_DEC, config->gen1_dec);
-	pci_write_config32(d31f0, D31F0_GEN2_DEC, config->gen2_dec);
-	pci_write_config32(d31f0, D31F0_GEN3_DEC, config->gen3_dec);
-	pci_write_config32(d31f0, D31F0_GEN4_DEC, config->gen4_dec);
+	pci_write_config32(d31f0, LPC_GEN1_DEC, config->gen1_dec);
+	pci_write_config32(d31f0, LPC_GEN2_DEC, config->gen2_dec);
+	pci_write_config32(d31f0, LPC_GEN3_DEC, config->gen3_dec);
+	pci_write_config32(d31f0, LPC_GEN4_DEC, config->gen4_dec);
 }
 
 void i82801ix_early_init(void)
@@ -59,7 +60,7 @@ void i82801ix_early_init(void)
 	pci_write_config8(d31f0, D31F0_ACPI_CNTL, 0x80);
 
 	/* Set up GPIOBASE. */
-	pci_write_config32(d31f0, D31F0_GPIO_BASE, DEFAULT_GPIOBASE);
+	pci_write_config32(d31f0, GPIOBASE, DEFAULT_GPIOBASE);
 	/* Enable GPIO. */
 	pci_or_config8(d31f0, D31F0_GPIO_CNTL, 0x10);
 

@@ -5,6 +5,8 @@
 // Serial IO Device BAR0 and BAR1 is 4KB
 #define SIO_BAR_LEN 0x1000
 
+// TODO: Replace this with some HAVE_DEVICE_NVS Kconfig
+#if !CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
 // This is defined in SSDT2 which is generated at boot based
 // on whether or not the device is enabled in ACPI mode.
 External (\S0EN)
@@ -15,6 +17,29 @@ External (\S4EN)
 External (\S5EN)
 External (\S6EN)
 External (\S7EN)
+#endif
+
+// Put SerialIO device in D0 state
+// Arg0 - Ref to offset 0x84 of device's PCI config space
+Method (LPD0, 1, Serialized)
+{
+	Arg0 = DeRefOf (Arg0) & 0xFFFFFFFC
+	Local0 = DeRefOf (Arg0) // Read back after writing
+
+	// Use Local0 to avoid iasl warning: Method Local is set but never used
+	Local0 &= Ones
+}
+
+// Put SerialIO device in D3 state
+// Arg0 - Ref to offset 0x84 of device's PCI config space
+Method (LPD3, 1, Serialized)
+{
+	Arg0 = DeRefOf (Arg0) | 0x3
+	Local0 = DeRefOf (Arg0) // Read back after writing
+
+	// Use Local0 to avoid iasl warning: Method Local is set but never used
+	Local0 &= Ones
+}
 
 // Serial IO Resource Consumption for BAR1
 Device (SIOR)
@@ -145,7 +170,15 @@ Device (SDMA)
 Device (I2C0)
 {
 	// Serial IO I2C0 Controller
-	Name (_HID, "INT33C2")
+	Method (_HID)
+	{
+		If (\ISWP ()) {
+			// WildcatPoint
+			Return ("INT3432")
+		}
+		// LynxPoint-LP
+		Return ("INT33C2")
+	}
 	Name (_CID, "INT33C2")
 	Name (_UID, 1)
 
@@ -193,39 +226,35 @@ Device (I2C0)
 		}
 	}
 
-	// Access to PCI Config in ACPI mode
-	OperationRegion (KEYS, SystemMemory, \S1B1, 0x100)
-	Field (KEYS, DWordAcc, NoLock, Preserve)
+	OperationRegion (SPRT, SystemMemory, \S1B1 + 0x84, 4)
+	Field (SPRT, DWordAcc, NoLock, Preserve)
 	{
-		Offset (0x84),
-		PSAT, 32,
+		SPCS, 32
 	}
 
-	// Put controller in D0 state
 	Method (_PS0, 0, Serialized)
 	{
-		^PSAT &= 0xfffffffc
-		Local0 = ^PSAT // Read back after writing
-
-		// Use Local0 to avoid iasl warning: Method Local is set but never used
-		Local0 &= Ones
+		^^LPD0 (RefOf (SPCS))
 	}
 
-	// Put controller in D3Hot state
 	Method (_PS3, 0, Serialized)
 	{
-		^PSAT |= 0x00000003
-		Local0 = ^PSAT // Read back after writing
-
-		// Use Local0 to avoid iasl warning: Method Local is set but never used
-		Local0 &= Ones
+		^^LPD3 (RefOf (SPCS))
 	}
 }
 
 Device (I2C1)
 {
 	// Serial IO I2C1 Controller
-	Name (_HID, "INT33C3")
+	Method (_HID)
+	{
+		If (\ISWP ()) {
+			// WildcatPoint
+			Return ("INT3433")
+		}
+		// LynxPoint-LP
+		Return ("INT33C3")
+	}
 	Name (_CID, "INT33C3")
 	Name (_UID, 1)
 
@@ -273,39 +302,35 @@ Device (I2C1)
 		}
 	}
 
-	// Access to PCI Config in ACPI mode
-	OperationRegion (KEYS, SystemMemory, \S2B1, 0x100)
-	Field (KEYS, DWordAcc, NoLock, Preserve)
+	OperationRegion (SPRT, SystemMemory, \S2B1 + 0x84, 4)
+	Field (SPRT, DWordAcc, NoLock, Preserve)
 	{
-		Offset (0x84),
-		PSAT, 32,
+		SPCS, 32
 	}
 
-	// Put controller in D0 state
 	Method (_PS0, 0, Serialized)
 	{
-		^PSAT &= 0xfffffffc
-		Local0 = ^PSAT // Read back after writing
-
-		// Use Local0 to avoid iasl warning: Method Local is set but never used
-		Local0 &= Ones
+		^^LPD0 (RefOf (SPCS))
 	}
 
-	// Put controller in D3Hot state
 	Method (_PS3, 0, Serialized)
 	{
-		^PSAT |= 0x00000003
-		Local0 = ^PSAT // Read back after writing
-
-		// Use Local0 to avoid iasl warning: Method Local is set but never used
-		Local0 &= Ones
+		^^LPD3 (RefOf (SPCS))
 	}
 }
 
 Device (SPI0)
 {
 	// Serial IO SPI0 Controller
-	Name (_HID, "INT33C0")
+	Method (_HID)
+	{
+		If (\ISWP ()) {
+			// WildcatPoint
+			Return ("INT3430")
+		}
+		// LynxPoint-LP
+		Return ("INT33C0")
+	}
 	Name (_CID, "INT33C0")
 	Name (_UID, 1)
 
@@ -337,12 +362,36 @@ Device (SPI0)
 			Return (0xF)
 		}
 	}
+
+	OperationRegion (SPRT, SystemMemory, \S3B1 + 0x84, 4)
+	Field (SPRT, DWordAcc, NoLock, Preserve)
+	{
+		SPCS, 32
+	}
+
+	Method (_PS0, 0, Serialized)
+	{
+		^^LPD0 (RefOf (SPCS))
+	}
+
+	Method (_PS3, 0, Serialized)
+	{
+		^^LPD3 (RefOf (SPCS))
+	}
 }
 
 Device (SPI1)
 {
 	// Serial IO SPI1 Controller
-	Name (_HID, "INT33C1")
+	Method (_HID)
+	{
+		If (\ISWP ()) {
+			// WildcatPoint
+			Return ("INT3431")
+		}
+		// LynxPoint-LP
+		Return ("INT33C1")
+	}
 	Name (_CID, "INT33C1")
 	Name (_UID, 1)
 
@@ -386,12 +435,36 @@ Device (SPI1)
 			Return (0xF)
 		}
 	}
+
+	OperationRegion (SPRT, SystemMemory, \S4B1 + 0x84, 4)
+	Field (SPRT, DWordAcc, NoLock, Preserve)
+	{
+		SPCS, 32
+	}
+
+	Method (_PS0, 0, Serialized)
+	{
+		^^LPD0 (RefOf (SPCS))
+	}
+
+	Method (_PS3, 0, Serialized)
+	{
+		^^LPD3 (RefOf (SPCS))
+	}
 }
 
 Device (UAR0)
 {
 	// Serial IO UART0 Controller
-	Name (_HID, "INT33C4")
+	Method (_HID)
+	{
+		If (\ISWP ()) {
+			// WildcatPoint
+			Return ("INT3434")
+		}
+		// LynxPoint-LP
+		Return ("INT33C4")
+	}
 	Name (_CID, "INT33C4")
 	Name (_UID, 1)
 
@@ -435,12 +508,36 @@ Device (UAR0)
 			Return (0xF)
 		}
 	}
+
+	OperationRegion (SPRT, SystemMemory, \S5B1 + 0x84, 4)
+	Field (SPRT, DWordAcc, NoLock, Preserve)
+	{
+		SPCS, 32
+	}
+
+	Method (_PS0, 0, Serialized)
+	{
+		^^LPD0 (RefOf (SPCS))
+	}
+
+	Method (_PS3, 0, Serialized)
+	{
+		^^LPD3 (RefOf (SPCS))
+	}
 }
 
 Device (UAR1)
 {
 	// Serial IO UART1 Controller
-	Name (_HID, "INT33C5")
+	Method (_HID)
+	{
+		If (\ISWP ()) {
+			// WildcatPoint
+			Return ("INT3435")
+		}
+		// LynxPoint-LP
+		Return ("INT33C5")
+	}
 	Name (_CID, "INT33C5")
 	Name (_UID, 1)
 
@@ -472,12 +569,36 @@ Device (UAR1)
 			Return (0xF)
 		}
 	}
+
+	OperationRegion (SPRT, SystemMemory, \S6B1 + 0x84, 4)
+	Field (SPRT, DWordAcc, NoLock, Preserve)
+	{
+		SPCS, 32
+	}
+
+	Method (_PS0, 0, Serialized)
+	{
+		^^LPD0 (RefOf (SPCS))
+	}
+
+	Method (_PS3, 0, Serialized)
+	{
+		^^LPD3 (RefOf (SPCS))
+	}
 }
 
 Device (SDIO)
 {
 	// Serial IO SDIO Controller
-	Name (_HID, "INT33C6")
+	Method (_HID)
+	{
+		If (\ISWP ()) {
+			// WildcatPoint
+			Return ("INT3436")
+		}
+		// LynxPoint-LP
+		Return ("INT33C6")
+	}
 	Name (_CID, "PNP0D40")
 	Name (_UID, 1)
 

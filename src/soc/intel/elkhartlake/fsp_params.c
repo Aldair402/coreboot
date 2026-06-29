@@ -393,6 +393,29 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 		params->PcieRpMaxPayload[i] = config->PcieRpMaxPayload[i];
 	}
 
+	/* PCIe link equalization config */
+	if (config->PcieEqOverrideDefault) {
+		params->PcieEqOverrideDefault = !!config->PcieEqOverrideDefault;
+		params->PcieEqMethod = config->PcieEqMethod;
+		params->PcieEqMode = config->PcieEqMode;
+		params->PcieEqPh3NumberOfPresetsOrCoefficients =
+				config->PcieEqPh3NumberOfPresetsOrCoefficients;
+		for (i = 0; i < PCIE_LINK_EQ_COEFFICIENTS_MAX; i++) {
+			params->PcieEqPh3PreCursorList[i] =
+					config->PcieEqPh3PreCursorList[i];
+			params->PcieEqPh3PostCursorList[i] =
+					config->PcieEqPh3PostCursorList[i];
+		}
+		for (i = 0; i < PCIE_LINK_EQ_PRESETS_MAX; i++) {
+			params->PcieEqPh3PresetList[i] =
+					config->PcieEqPh3PresetList[i];
+		}
+		params->PcieEqPh1DownstreamPortTransmitterPreset =
+				config->PcieEqPh1DownstreamPortTransmitterPreset;
+		params->PcieEqPh1UpstreamPortTransmitterPreset =
+				config->PcieEqPh1UpstreamPortTransmitterPreset;
+	}
+
 	/* SATA config */
 	params->SataEnable = is_devfn_enabled(PCH_DEVFN_SATA);
 	if (params->SataEnable) {
@@ -460,7 +483,7 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 	params->DcLoadline[0] = DC_LOADLINE_LANE_0_MAX;
 	params->AcLoadline[1] = AC_LOADLINE_LANE_1_MAX;
 	params->DcLoadline[1] = DC_LOADLINE_LANE_1_MAX;
-	params->IccMax[0] = ICC_LIMIT_MAX;
+	params->IccMax[0] = config->IccMax ? config->IccMax : ICC_LIMIT_MAX;
 	params->OneCoreRatioLimit = CORE_RATIO_LIMIT;
 	params->TwoCoreRatioLimit = CORE_RATIO_LIMIT;
 	params->ThreeCoreRatioLimit = CORE_RATIO_LIMIT;

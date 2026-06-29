@@ -17,6 +17,14 @@ config EC_GOOGLE_CHROMEEC_ACPI_MEMMAP
 	  not defined, the memmap data is instead accessed on 900h-9ffh via
 	  the LPC bus.
 
+config EC_GOOGLE_CHROMEEC_ACPI_HID
+	string
+	default "GOOG0004"
+	help
+	  Allow customizing the ACPI HID name to allow the OSPM to match on
+	  different CrosEC implementations (e.g. Framework Computer's
+	  FRMWC004).
+
 config EC_GOOGLE_CHROMEEC_ACPI_USB_PORT_POWER
 	def_bool n
 	help
@@ -260,6 +268,20 @@ config EC_GOOGLE_CHROMEEC_BATTERY_SOC_DYNAMIC
 	  Selecting this option forces the use of ec_cmd_battery_get_dynamic(),
 	  which retrieves cached telemetry from the EC rather than triggering
 	  a synchronous bus transaction to the battery.
+
+config EC_GOOGLE_CHROMEEC_LED_CONTROL
+	bool
+	help
+	  Enable manual AP control over ChromeEC LEDs/lightbars to ensure
+	  visual continuity with AP-side boot animations.
+
+config EC_CHROMEEC_USE_VENDOR_TABLET_CONTROLS
+	bool "Include vendor tablet mode controls (VBTN/VGBI) in ACPI"
+	default y if !CHROMEOS && (SYSTEM_TYPE_CONVERTIBLE || SYSTEM_TYPE_DETACHABLE)
+	help
+	  Include ACPI devices for tablet mode / convertible controls (Intel VBTN,
+	  AMD VGBI). Default is enabled for non-ChromeOS builds when the board
+	  reports SMBIOS enclosure type convertible or detachable.
 
 endif # EC_GOOGLE_CHROMEEC
 

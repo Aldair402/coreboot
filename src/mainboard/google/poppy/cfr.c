@@ -6,15 +6,11 @@
 #include <intelblocks/cfr.h>
 #include <soc/cfr.h>
 
-static const struct sm_object ipu_camera = SM_DECLARE_ENUM({
+static const struct sm_object ipu_camera = SM_DECLARE_BOOL({
 	.opt_name	= "ipu_camera",
 	.ui_name	= "IPU Camera",
 	.ui_helptext	= "Enable or disable integrated camera devices",
 	.default_value	= true,
-	.values		= (const struct sm_enum_value[]) {
-		{ "Disabled",		0		},
-		{ "Enabled",		1		},
-		SM_ENUM_VALUE_END			},
 	#if !CONFIG(VARIANT_HAS_CAMERA_ACPI)
 	.flags		= CFR_OPTFLAG_SUPPRESS,
 	#endif
@@ -30,6 +26,7 @@ static struct sm_obj_form system = {
 		&legacy_8254_timer,
 		&me_state,
 		&me_state_counter,
+		&disable_heci1_at_pre_boot,
 		&pciexp_aspm,
 		&pciexp_clk_pm,
 		&pciexp_l1ss,

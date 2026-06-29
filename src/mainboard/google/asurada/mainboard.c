@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <baseboard/gpio.h>
 #include <bootmode.h>
 #include <console/console.h>
 #include <delay.h>
@@ -20,8 +21,6 @@
 #include <soc/regulator.h>
 #include <soc/spm.h>
 #include <soc/usb.h>
-
-#include "gpio.h"
 
 #define MSDC0_BASE	0x11f60000
 #define MSDC0_TOP_BASE	0x11f50000
@@ -113,7 +112,7 @@ static bool configure_display(void)
 			      MIPI_DSI_MODE_LINE_END |
 			      MIPI_DSI_MODE_EOT_PACKET);
 
-	if (mtk_dsi_init(mipi_dsi_flags, MIPI_DSI_FMT_RGB888, 4, &edid, NULL) < 0) {
+	if (mtk_dsi_init(mipi_dsi_flags, MIPI_DSI_FMT_RGB888, 4, &edid, NULL, NULL) < 0) {
 		printk(BIOS_ERR, "%s: Failed in DSI init\n", __func__);
 		return false;
 	}

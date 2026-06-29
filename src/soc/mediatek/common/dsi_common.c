@@ -278,6 +278,8 @@ static void mtk_dsi_config_vdo_timing(struct dsi_regs *const dsi_reg, u32 mode_f
 	u32 hbp_offset;
 	bool is_cphy = !!(mode_flags & MIPI_DSI_MODE_CPHY);
 	bool is_dsc_enabled = !!(mode_flags & MIPI_DSI_DSC_MODE);
+	bool cphy_mode;
+	u32 hfp_wc_upper = 0;
 	int channels = !!(mode_flags & MIPI_DSI_DUAL_CHANNEL) ? 2 : 1;
 	int dsc_ratio = is_dsc_enabled ? COMPRESSION_RATIO : UNCOMPRESSED_RATIO;
 
@@ -301,9 +303,11 @@ static void mtk_dsi_config_vdo_timing(struct dsi_regs *const dsi_reg, u32 mode_f
 
 	hfp_byte = hfp * bytes_per_pixel;
 
-	if (CONFIG(MEDIATEK_DSI_CPHY) && is_cphy)
+	cphy_mode = CONFIG(MEDIATEK_DSI_CPHY) && is_cphy;
+
+	if (cphy_mode)
 		mtk_dsi_cphy_vdo_timing(lanes, edid, phy_timing, bytes_per_pixel, hbp, hfp,
-					&hbp_byte, &hfp_byte, &hsync_active_byte);
+					&hbp_byte, &hfp_byte, &hsync_active_byte, &hfp_wc_upper);
 	else
 		mtk_dsi_dphy_vdo_timing(mode_flags, lanes, edid, phy_timing, bytes_per_pixel,
 					hbp, hfp, &hbp_byte, &hfp_byte, &hsync_active_byte);
@@ -325,7 +329,7 @@ static void mtk_dsi_config_vdo_timing(struct dsi_regs *const dsi_reg, u32 mode_f
 
 	write32(&dsi_reg->dsi_hsa_wc, hsync_active_byte);
 	write32(&dsi_reg->dsi_hbp_wc, hbp_byte);
-	write32(&dsi_reg->dsi_hfp_wc, hfp_byte);
+	write32(&dsi_reg->dsi_hfp_wc, hfp_byte | hfp_wc_upper);
 
 	if (is_dsc_enabled)
 		packet_fmt = COMPRESSED_PIXEL_STREAM_V2;
@@ -444,8 +448,13 @@ static void mtk_dsi_reset_phy(struct dsi_regs *const dsi_reg)
 	clrbits32(&dsi_reg->dsi_con_ctrl, DPHY_RESET);
 }
 
+static void mtk_dsi_stop(struct dsi_regs *dsi)
+{
+	write32(&dsi->dsi_start, 0);
+}
+
 int mtk_dsi_init(u32 mode_flags, u32 format, u32 lanes, const struct edid *edid,
-		 const u8 *init_commands)
+		 const u8 *init_commands, struct thread_mutex *ready_mutex)
 {
 	u32 data_rate;
 	u32 bits_per_pixel = mtk_dsi_get_bits_per_pixel(format);
@@ -492,6 +501,8 @@ int mtk_dsi_init(u32 mode_flags, u32 format, u32 lanes, const struct edid *edid,
 		mtk_dsi_clk_hs_mode_enable(dsi);
 	}
 
+	if (ready_mutex)
+		thread_mutex_unlock(ready_mutex);
 	if (init_commands)
 		mipi_panel_parse_commands(init_commands, mtk_dsi_cmdq, &mode_flags);
 
@@ -501,4 +512,46 @@ int mtk_dsi_init(u32 mode_flags, u32 format, u32 lanes, const struct edid *edid,
 	mtk_dsi_enable_and_start(is_dsi_dual_channel);
 
 	return 0;
+}
+
+int mtk_dsi_panel_poweroff(u32 mode_flags, const u8 *poweroff_cmds)
+{
+	int ret;
+	unsigned int num_dsi = (mode_flags & MIPI_DSI_DUAL_CHANNEL) ? 2 : 1;
+
+	/* Stop DSI-0 engine */
+	mtk_dsi_stop(dsi_mipi_regs[0].dsi_reg);
+
+	/* Wait for DSI engines to become idle */
+	for (unsigned int i = 0; i < num_dsi; i++) {
+		struct dsi_regs *dsi = dsi_mipi_regs[i].dsi_reg;
+
+		if (!wait_ms(20, !(read32(&dsi->dsi_intsta) & DSI_BUSY))) {
+			u32 intsta = read32(&dsi->dsi_intsta);
+
+			printk(BIOS_ERR, "%s: Timeout (20ms) waiting for DSI-%d idle "
+			       "and the panel may not power-off properly. "
+			       "DSI_INTSTA=0x%08x.\n",
+			       __func__, i, intsta);
+			return -1;
+		}
+
+		write32(&dsi->dsi_intsta, 0);
+		write32(&dsi->dsi_mode_ctrl, CMD_MODE);
+	}
+
+	/* Send panel poweroff commands */
+	ret = mipi_panel_parse_commands(poweroff_cmds, mtk_dsi_cmdq,
+					&mode_flags);
+
+	/* Final shutdown: stop + disable PHY */
+	mtk_dsi_stop(dsi_mipi_regs[0].dsi_reg);
+
+	for (unsigned int i = 0; i < num_dsi; i++) {
+		struct dsi_regs *dsi = dsi_mipi_regs[i].dsi_reg;
+
+		write32(&dsi->dsi_phy_lccon, 0x0);
+	}
+
+	return ret;
 }

@@ -1,7 +1,5 @@
 chip soc/intel/elkhartlake
 
-	device cpu_cluster 0 on end
-
 	# GPE configuration
 	# Note that GPE events called out in ASL code rely on this
 	# route. i.e. If this route changes then the affected GPE
@@ -166,13 +164,13 @@ chip soc/intel/elkhartlake
 			chip drivers/i2c/rx6110sa
 				register "bus_speed" = "I2C_SPEED_STANDARD"
 				register "pmon_sampling" = "PMON_SAMPL_256_MS"
-				register "bks_on" = "0"
-				register "bks_off" = "1"
-				register "iocut_en" = "1"
-				register "set_user_date" = "1"
-				register "user_year" = "04"
-				register "user_month" = "07"
-				register "user_day" = "01"
+				register "bks_on" = "false"
+				register "bks_off" = "true"
+				register "iocut_en" = "true"
+				register "set_user_date" = "true"
+				register "user_year" = "4"
+				register "user_month" = "7"
+				register "user_day" = "1"
 				register "user_weekday" = "4"
 				device i2c 0x32 on end  # RTC RX6110 SA
 			end

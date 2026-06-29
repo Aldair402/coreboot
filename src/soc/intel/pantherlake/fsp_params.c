@@ -10,6 +10,7 @@
 #include <fsp/fsp_gop_blt.h>
 #include <fsp/ppi/mp_service_ppi.h>
 #include <intelblocks/aspm.h>
+#include <intelblocks/cfg.h>
 #include <intelblocks/irq.h>
 #include <intelblocks/mp_init.h>
 #include <intelblocks/pmclib.h>
@@ -289,13 +290,27 @@ static void fill_fsps_microcode_params(FSP_S_CONFIG *s_cfg,
 static void fill_fsps_igd_params(FSP_S_CONFIG *s_cfg,
 				 const struct soc_intel_pantherlake_config *config)
 {
-	/* Load VBT before devicetree-specific config. */
-	s_cfg->GraphicsConfigPtr = (uintptr_t)vbt_get();
+	struct soc_intel_common_config *common_config;
+	bool lid_is_open;
 
-	/* Check if IGD is present and fill Graphics init param accordingly */
+	/* Basic Graphics & VBT Configuration */
+	s_cfg->GraphicsConfigPtr = (uintptr_t)vbt_get();
 	s_cfg->PeiGraphicsPeimInit = CONFIG(RUN_FSP_GOP) && is_devfn_enabled(PCI_DEVFN_IGD);
-	s_cfg->LidStatus = CONFIG(VBOOT_LID_SWITCH) ? get_lid_switch() : CONFIG(RUN_FSP_GOP);
 	s_cfg->PavpEnable = CONFIG(PAVP);
+
+	/* Determine LID Status */
+	lid_is_open = CONFIG(VBOOT_LID_SWITCH) ? !!get_lid_switch() : !!CONFIG(RUN_FSP_GOP);
+	s_cfg->LidStatus = lid_is_open;
+
+	/*
+	 * Display Constraints
+	 * Only restrict to a single display if the LID is open and the
+	 * internal panel is in a non-standard (portrait) orientation.
+	 */
+	common_config = chip_get_common_soc_structure();
+	if (common_config && lid_is_open &&
+	    (common_config->panel_orientation != LB_FB_ORIENTATION_NORMAL))
+		s_cfg->MaxActiveDisplays = 1;
 }
 
 static void fill_fsps_tcss_params(FSP_S_CONFIG *s_cfg,
@@ -518,6 +533,7 @@ static void fill_fsps_cnvi_params(FSP_S_CONFIG *s_cfg,
 	s_cfg->CnviWifiCore = config->cnvi_wifi_core;
 	s_cfg->CnviBtCore = config->cnvi_bt_core;
 	s_cfg->CnviBtAudioOffload = config->cnvi_bt_audio_offload;
+	s_cfg->CnviWwanCoex = config->cnvi_wwan_coex;
 
 	if (!s_cfg->CnviMode && s_cfg->CnviWifiCore) {
 		printk(BIOS_ERR, "CNVi WiFi is enabled without CNVi being enabled\n");
@@ -531,6 +547,10 @@ static void fill_fsps_cnvi_params(FSP_S_CONFIG *s_cfg,
 		printk(BIOS_ERR, "CNVi BT is enabled without CNVi being enabled\n");
 		s_cfg->CnviBtCore = 0;
 		s_cfg->CnviBtAudioOffload = 0;
+	}
+	if (!s_cfg->CnviMode && s_cfg->CnviWwanCoex) {
+		printk(BIOS_ERR, "CNVi WWAN Coex enabled without CNVi being enabled\n");
+		s_cfg->CnviWwanCoex = 0;
 	}
 
 	s_cfg->CnviBtInterface = is_devfn_enabled(PCI_DEVFN_CNVI_BT) ? 2 : 1;
@@ -589,6 +609,10 @@ static void fill_fsps_pcie_params(FSP_S_CONFIG *s_cfg,
 	uint32_t enable_mask = pcie_rp_enable_mask(get_pcie_rp_table());
 
 	for (size_t i = 0; i < CONFIG_MAX_ROOT_PORTS; i++) {
+		if (CONFIG(SOC_INTEL_COMPLIANCE_TEST_MODE)) {
+			s_cfg->PcieClockGating[i] = 0;
+			s_cfg->PciePowerGating[i] = 0;
+		}
 		if (!(enable_mask & BIT(i)))
 			continue;
 		const struct pcie_rp_config *rp_cfg = &config->pcie_rp[i];
@@ -597,6 +621,9 @@ static void fill_fsps_pcie_params(FSP_S_CONFIG *s_cfg,
 		s_cfg->PcieRpHotPlug[i] =
 			!!(rp_cfg->flags & PCIE_RP_HOTPLUG) || CONFIG(SOC_INTEL_COMPLIANCE_TEST_MODE);
 		s_cfg->PcieRpClkReqDetect[i] = !!(rp_cfg->flags & PCIE_RP_CLK_REQ_DETECT);
+		/* PcieRpSlotImplemented defaults to 1 (slot implemented) in FSP; 0: built-in */
+		if (rp_cfg->flags & PCIE_RP_BUILT_IN)
+			s_cfg->PcieRpSlotImplemented[i] = false;
 		s_cfg->PcieRpDetectTimeoutMs[i] = rp_cfg->pcie_rp_detect_timeout_ms;
 		configure_pch_rp_power_management(s_cfg, rp_cfg, i);
 	}
@@ -706,6 +733,9 @@ static void fill_fsps_ufs_params(FSP_S_CONFIG *s_cfg,
 	/* Setting FSP UPD (1,0) to enable controller 0 */
 	s_cfg->UfsEnable[0] = is_devfn_enabled(PCI_DEVFN_UFS);
 	s_cfg->UfsEnable[1] = 0;
+	s_cfg->UfsInlineEncryption[0] = is_devfn_enabled(PCI_DEVFN_UFS)
+					&& config->ufs_inline_encryption;
+	s_cfg->UfsInlineEncryption[1] = 0;
 #else
 	/* Setting FSP UPD (0,0) to keep both controllers disabled */
 	s_cfg->UfsEnable[0] = 0;

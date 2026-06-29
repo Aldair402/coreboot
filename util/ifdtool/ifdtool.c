@@ -272,6 +272,8 @@ static enum ich_chipset ifd2_platform_to_chipset(const int pindex)
 		return CHIPSET_800_SERIES_METEOR_LAKE;
 	case PLATFORM_PTL:
 		return CHIPSET_900_SERIES_PANTHER_LAKE;
+	case PLATFORM_NVL:
+		return CHIPSET_900_SERIES_NOVA_LAKE;
 	case PLATFORM_ICL:
 		return CHIPSET_400_SERIES_ICE_POINT;
 	case PLATFORM_LBG:
@@ -308,6 +310,7 @@ static int is_platform_ifd_2(void)
 		PLATFORM_IFD2,
 		PLATFORM_MTL,
 		PLATFORM_PTL,
+		PLATFORM_NVL,
 		PLATFORM_WBG,
 	};
 	unsigned int i;
@@ -565,6 +568,7 @@ static void decode_spi_frequency(unsigned int freq)
 	case CHIPSET_500_600_SERIES_TIGER_ALDER_POINT:
 	case CHIPSET_800_SERIES_METEOR_LAKE:
 	case CHIPSET_900_SERIES_PANTHER_LAKE:
+	case CHIPSET_900_SERIES_NOVA_LAKE:
 		_decode_spi_frequency_500_series(freq);
 		break;
 	default:
@@ -649,6 +653,7 @@ static void decode_espi_frequency(unsigned int freq)
 		break;
 	case CHIPSET_800_SERIES_METEOR_LAKE:
 	case CHIPSET_900_SERIES_PANTHER_LAKE:
+	case CHIPSET_900_SERIES_NOVA_LAKE:
 		_decode_espi_frequency_800_series(freq);
 		break;
 	default:
@@ -703,7 +708,7 @@ static int is_platform_with_pch(void)
 static int is_platform_with_100x_series_pch(void)
 {
 	if (chipset >= CHIPSET_100_200_SERIES_SUNRISE_POINT &&
-			chipset <= CHIPSET_900_SERIES_PANTHER_LAKE)
+			chipset <= CHIPSET_900_SERIES_NOVA_LAKE)
 		return 1;
 
 	return 0;
@@ -1041,7 +1046,8 @@ static void dump_fd(char *image, int size)
 
 	if (chipset == CHIPSET_500_600_SERIES_TIGER_ALDER_POINT ||
 		 chipset == CHIPSET_800_SERIES_METEOR_LAKE ||
-		 chipset == CHIPSET_900_SERIES_PANTHER_LAKE) {
+		 chipset == CHIPSET_900_SERIES_PANTHER_LAKE ||
+		 chipset == CHIPSET_900_SERIES_NOVA_LAKE) {
 		printf("FLMAP3:    0x%08x\n", fdb->flmap3);
 		printf("  Minor Revision ID:     0x%04x\n", (fdb->flmap3 >> 14) & 0x7f);
 		printf("  Major Revision ID:     0x%04x\n", (fdb->flmap3 >> 21) & 0x7ff);
@@ -1076,11 +1082,26 @@ static void dump_fd(char *image, int size)
 	}
 }
 
-/* Takes an image containing an IFD and creates a Flashmap .fmd file template.
- * This flashmap will contain all IFD regions except the BIOS region.
- * The BIOS region is created by coreboot itself and 'should' match the IFD region
- * anyway (CONFIG_VALIDATE_INTEL_DESCRIPTOR should make sure). coreboot built system will use
- * this template to generate the final Flashmap file.
+static unsigned int ifd_image_size(const struct frba *frba)
+{
+	unsigned int end = 0;
+
+	for (unsigned int i = 0; i < max_regions; i++) {
+		struct region region = get_region(frba, i);
+
+		if (region.limit == 0 || region.base == 0x07FFF000)
+			continue;
+
+		unsigned int region_end = (unsigned int)region.limit + 1;
+		if (region_end > end)
+			end = region_end;
+	}
+
+	return end;
+}
+
+/* Writes a complete .fmd for the IFD layout (valid input for fmaptool).
+ * coreboot replaces the SI_BIOS line with a top-aligned region and sub-layout.
  */
 static void create_fmap_template(char *image, int size, const char *layout_fname)
 {
@@ -1094,15 +1115,16 @@ static void create_fmap_template(char *image, int size, const char *layout_fname
 		exit(EXIT_FAILURE);
 	}
 
-	char *bbuf = "FLASH ##FLASH_SIZE## {\n";
-	if (write(layout_fd, bbuf, strlen(bbuf)) < 0) {
+	unsigned int flash_size = ifd_image_size(frba);
+	char buf[LAYOUT_LINELEN];
+
+	snprintf(buf, LAYOUT_LINELEN, "FLASH 0x%X {\n", flash_size);
+	if (write(layout_fd, buf, strlen(buf)) < 0) {
 		perror("Could not write to file");
 		exit(EXIT_FAILURE);
 	}
 
-	/* fmaptool requires regions in .fmd to be sorted.
-	 * => We need to sort the regions by base address before writing them in .fmd File
-	 */
+	/* fmaptool requires regions in .fmd to be sorted by base address. */
 	int count_regions = 0;
 	struct region sorted_regions[MAX_REGIONS] = { 0 };
 	for (unsigned int i = 0; i < max_regions; i++) {
@@ -1122,54 +1144,36 @@ static void create_fmap_template(char *image, int size, const char *layout_fname
 			continue;
 		}
 
-		/* Here we decide to use the coreboot generated FMAP BIOS region, instead of
-		 * the one specified in the IFD. The case when IFD and FMAP BIOS region do not
-		 * match cannot be caught here, therefore one should still validate IFD and
-		 * FMAP via CONFIG_VALIDATE_INTEL_DESCRIPTOR
-		 */
-		if (i == REGION_BIOS)
-			continue;
-
 		sorted_regions[count_regions] = region;
-		// basically insertion sort
-		for (int i = count_regions - 1; i >= 0; i--) {
-			if (sorted_regions[i].base > sorted_regions[i + 1].base) {
-				struct region tmp = sorted_regions[i];
-				sorted_regions[i] = sorted_regions[i + 1];
-				sorted_regions[i + 1] = tmp;
+		/* insertion sort by base */
+		for (int j = count_regions - 1; j >= 0; j--) {
+			if (sorted_regions[j].base > sorted_regions[j + 1].base) {
+				struct region tmp = sorted_regions[j];
+				sorted_regions[j] = sorted_regions[j + 1];
+				sorted_regions[j + 1] = tmp;
 			}
 		}
 		count_regions++;
 	}
 
-	// Now write regions sorted by base address in the fmap file
 	for (int i = 0; i < count_regions; i++) {
 		struct region region = sorted_regions[i];
-		char buf[LAYOUT_LINELEN];
-		snprintf(buf, LAYOUT_LINELEN, "\t%s@0x%X 0x%X\n", region_names[region.type].fmapname, region.base, region.size);
+
+		snprintf(buf, LAYOUT_LINELEN, "\t%s@0x%X 0x%X\n",
+			 region_names[region.type].fmapname, region.base, region.size);
 		if (write(layout_fd, buf, strlen(buf)) < 0) {
 			perror("Could not write to file");
 			exit(EXIT_FAILURE);
 		}
 	}
 
-	char *ebuf = "\tSI_BIOS@##BIOS_BASE## ##BIOS_SIZE## {\n"
-		     "\t\t##CONSOLE_ENTRY##\n"
-		     "\t\t##MRC_CACHE_ENTRY##\n"
-		     "\t\t##SMMSTORE_ENTRY##\n"
-		     "\t\t##SPD_CACHE_ENTRY##\n"
-		     "\t\t##VPD_ENTRY##\n"
-		     "\t\tFMAP@##FMAP_BASE## ##FMAP_SIZE##\n"
-		     "\t\tCOREBOOT(CBFS)@##CBFS_BASE## ##CBFS_SIZE##\n"
-		     "\t}\n"
-		     "}\n";
-	if (write(layout_fd, ebuf, strlen(ebuf)) < 0) {
+	if (write(layout_fd, "}\n", 2) < 0) {
 		perror("Could not write to file");
 		exit(EXIT_FAILURE);
 	}
 
 	close(layout_fd);
-	printf("Wrote layout to %s\n", layout_fname);
+	printf("Wrote IFD flashmap to %s\n", layout_fname);
 }
 
 static void write_regions(char *image, int size)
@@ -1413,6 +1417,7 @@ static bool platform_has_extended_regions(void)
 	case PLATFORM_ADL:
 	case PLATFORM_MTL:
 	case PLATFORM_PTL:
+	case PLATFORM_NVL:
 		return true;
 	default:
 		return false;
@@ -1478,6 +1483,7 @@ static void lock_descriptor(const char *filename, char *image, int size)
 	case PLATFORM_IFD2:
 	case PLATFORM_MTL:
 	case PLATFORM_PTL:
+	case PLATFORM_NVL:
 		/* CPU/BIOS can read descriptor and BIOS. */
 		fmba->flmstr1 |= (1 << REGION_DESC) << rd_shift;
 		fmba->flmstr1 |= (1 << REGION_BIOS) << rd_shift;
@@ -1632,6 +1638,7 @@ static uint8_t get_cse_data_partition_offset(void)
 	case PLATFORM_ADL:
 	case PLATFORM_MTL:
 	case PLATFORM_PTL:
+	case PLATFORM_NVL:
 		data_offset = 0x18;
 		break;
 	default:
@@ -1662,6 +1669,9 @@ static uint32_t get_gpr0_offset(void)
 		break;
 	case PLATFORM_PTL:
 		gpr0_offset = 0x76;
+		break;
+	case PLATFORM_NVL:
+		gpr0_offset = 0x3C;
 		break;
 	default:
 		break;
@@ -2094,7 +2104,18 @@ static void new_layout(const char *filename, char *image, int size,
 
 		for (j = i + 1; j < max_regions; j++) {
 			if (regions_collide(&new_regions[i], &new_regions[j])) {
-				fprintf(stderr, "Regions would overlap.\n");
+				fprintf(stderr, "Regions would overlap:\n");
+
+				/* See which string is longer and make sure we pad the shorter one */
+				int region_name_len_i = strlen(region_name(i));
+				int region_name_len_j = strlen(region_name(j));
+				int padding = MAX(region_name_len_i, region_name_len_j);
+
+				/* Print the regions that overlap, and where each region is */
+				fprintf(stderr, "  %*s : %x-%x\n", padding, region_name(i),
+					new_regions[i].base, new_regions[i].limit);
+				fprintf(stderr, "  %*s : %x-%x\n", padding, region_name(j),
+					new_regions[j].base, new_regions[j].limit);
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -2203,7 +2224,7 @@ static void print_usage(const char *name)
 	printf("\n"
 	       "   -d | --dump:                          dump intel firmware descriptor\n"
 	       "   -f | --layout <filename>              dump regions into a flashrom layout file\n"
-	       "   -F | --fmap-layout <filename>         dump IFD regions into a fmap layout template (.fmd) file\n"
+	       "   -F | --fmap-layout <filename>         write a complete .fmd from the IFD layout\n"
 	       "   -t | --validate                       Validate that the firmware descriptor layout matches the fmap layout\n"
 	       "   -x | --extract:                       extract intel fd modules\n"
 	       "   -i | --inject <region>:<module>       inject file <module> into region <region>\n"
@@ -2238,6 +2259,8 @@ static void print_usage(const char *name)
 	       "                                         mtl    - Meteor Lake\n"
 	       "                                         sklkbl - Sky Lake/Kaby Lake\n"
 	       "                                         tgl    - Tiger Lake\n"
+	       "                                         ptl    - Panther Lake\n"
+	       "                                         nvl    - Nova Lake\n"
 	       "                                         wbg    - Wellsburg\n"
 	       "   -S | --setpchstrap                    Write a PCH strap\n"
 	       "   -V | --newvalue                       The new value to write into PCH strap specified by -S\n"
@@ -2538,6 +2561,8 @@ int main(int argc, char *argv[])
 				platform = PLATFORM_MTL;
 			} else if (!strcmp(optarg, "ptl")) {
 				platform = PLATFORM_PTL;
+			} else if (!strcmp(optarg, "nvl")) {
+				platform = PLATFORM_NVL;
 			} else if (!strcmp(optarg, "wbg")) {
 				platform = PLATFORM_WBG;
 			} else {

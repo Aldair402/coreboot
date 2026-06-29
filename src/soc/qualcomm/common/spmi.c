@@ -2,11 +2,10 @@
 
 #include <arch/mmio.h>
 #include <commonlib/bsd/stdlib.h>
+#include <delay.h>
 #include <soc/addressmap.h>
 #include <soc/qcom_spmi.h>
 #include <timer.h>
-
-#define PPID_MASK		(0xfffU << 8)
 
 /* These are opcodes specific to this SPMI arbitrator, *not* SPMI commands. */
 #define OPC_EXT_WRITEL		0
@@ -19,8 +18,13 @@
 
 #define ERROR_APID_NOT_FOUND	(-(int)BIT(8))
 #define ERROR_TIMEOUT		(-(int)BIT(9))
+/* Add this for your specific SPMI read error (-9) */
+#define ERROR_SPMI_READ_FAILED  (-9)
 
 #define ARB_COMMAND_TIMEOUT_MS	100
+
+#define MAX_SPMI_RETRIES    6
+#define SPMI_RETRY_DELAY_MS 50
 
 // Individual register block per APID
 struct qcom_spmi_regs {
@@ -53,10 +57,11 @@ struct qcom_spmi qcom_spmi = {
 static struct qcom_spmi_regs *find_apid(uint32_t addr)
 {
 	size_t i;
+	uint32_t target_ppid = SPMI_PPID_FROM_ADDR(addr);
 
 	for (i = 0U; i < qcom_spmi.num_apid; i++) {
 		uint32_t reg = read32(&qcom_spmi.apid_map[i]);
-		if ((reg != 0U) && ((addr & PPID_MASK) == (reg & PPID_MASK)))
+		if ((reg != 0U) && (target_ppid == SPMI_PPID_FROM_REG(reg)))
 			return &qcom_spmi.regs_per_apid[i];
 	}
 
@@ -101,7 +106,7 @@ int spmi_read8(uint32_t addr)
 	int ret = wait_for_done(regs);
 	if (ret != 0) {
 		printk(BIOS_ERR, "ERROR: SPMI_ARB read error [0x%x]: 0x%x\n", addr, ret);
-		return ret;
+		return ERROR_SPMI_READ_FAILED;
 	}
 
 	return read32(&regs->rdata0) & 0xff;
@@ -140,4 +145,41 @@ int spmi_read_bytes(uint32_t addr, uint8_t *data, uint32_t num_bytes)
 		data++;
 	}
 	return 0;
+}
+
+/* Helper to handle transient SPMI bus errors with retries */
+int spmi_read8_safe(uint32_t reg)
+{
+	int val;
+	int retries = 0;
+
+	do {
+		val = spmi_read8(reg);
+		if (val != ERROR_SPMI_READ_FAILED)
+			return val;
+
+		printk(BIOS_WARNING, "SPMI read error at 0x%x. Retry %d/%d in %dms\n",
+		       reg, retries + 1, MAX_SPMI_RETRIES, SPMI_RETRY_DELAY_MS);
+
+		mdelay(SPMI_RETRY_DELAY_MS);
+		retries++;
+	} while (retries < MAX_SPMI_RETRIES);
+
+	return ERROR_SPMI_READ_FAILED;
+}
+
+int spmi_rmw8(uint32_t addr, uint8_t mask, uint8_t value)
+{
+	int spmi_result;
+	uint8_t data;
+
+	spmi_result = spmi_read8(addr);
+	if (spmi_result < 0)
+		return -1;
+	data = spmi_result & 0xff;
+
+	data &= ~mask;
+	data |= value;
+	spmi_result = spmi_write8(addr, data);
+	return (spmi_result < 0) ? -1 : 0;
 }

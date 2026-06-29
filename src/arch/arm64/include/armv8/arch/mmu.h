@@ -42,6 +42,7 @@
 
 #define BLOCK_XN                   (1UL << 54)
 
+#define BLOCK_SH_MASK                  (0x3 << BLOCK_SH_SHIFT)
 #define BLOCK_SH_SHIFT                 (8)
 #define BLOCK_SH_NON_SHAREABLE         (0 << BLOCK_SH_SHIFT)
 #define BLOCK_SH_UNPREDICTABLE         (1 << BLOCK_SH_SHIFT)
@@ -152,5 +153,7 @@ void mmu_config_range(void *start, size_t size, uint64_t tag);
 void mmu_enable(void);
 /* Disable the MMU (which also disables dcache but not icache). */
 void mmu_disable(void);
+/* Relocates a Translation Table Base (TTB) from _preram_ttb to _postram_ttb */
+void mmu_relocate_ttb(void);
 
 #endif /* __ARCH_ARM64_MMU_H__ */

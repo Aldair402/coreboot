@@ -6,6 +6,7 @@
 #include <console/console.h>
 #include <delay.h>
 #include <edid.h>
+#include <elog.h>
 #include <framebuffer_info.h>
 #include <soc/ddp.h>
 #include <soc/display.h>
@@ -16,6 +17,7 @@
 #include <symbols.h>
 #include <timestamp.h>
 
+static u32 dsi_mode_flags;
 static struct panel_serializable_data *mipi_data;
 
 static struct panel_serializable_data *get_mipi_cmd_from_cbfs(struct panel_description *desc)
@@ -49,14 +51,15 @@ __weak int mtk_edp_init(struct mtk_dp *mtk_dp, struct edid *edid)
 	return -1;
 }
 
-__weak int mtk_edp_enable(struct mtk_dp *mtk_dp)
+__weak int mtk_edp_enable(const struct mtk_dp *mtk_dp)
 {
 	printk(BIOS_WARNING, "%s: Not supported\n", __func__);
 	return -1;
 }
 
 __weak int mtk_dsi_init(u32 mode_flags, u32 format, u32 lanes,
-			const struct edid *edid, const u8 *init_commands)
+			const struct edid *edid, const u8 *init_commands,
+			struct thread_mutex *ready_mutex)
 {
 	printk(BIOS_WARNING, "%s: Not supported\n", __func__);
 	return -1;
@@ -90,7 +93,7 @@ static void display_logo(struct panel_description *panel,
 		.panel_orientation = panel->orientation,
 		.halignment = FW_SPLASH_HALIGNMENT_CENTER,
 		.valignment = FW_SPLASH_VALIGNMENT_CENTER,
-		.logo_bottom_margin = 100,
+		.logo_bottom_margin = CONFIG(FRAMEBUFFER_SPLASH_TEXT) ? 200 : 100,
 	};
 	render_logo_to_framebuffer(&config);
 
@@ -99,9 +102,11 @@ static void display_logo(struct panel_description *panel,
 	panel_configure_backlight(panel, true);
 
 	timestamp_add_now(TS_FIRMWARE_SPLASH_RENDERED);
+	printk(BIOS_DEBUG, "Firmware Splash Screen: Enabled\n");
+	elog_add_event_byte(ELOG_TYPE_FW_SPLASH_SCREEN, 1);
 }
 
-int mtk_display_init(void)
+int mtk_display_init(struct thread_mutex *ready_mutex)
 {
 	struct edid edid = {0};
 	struct mtk_dp mtk_edp = {0};
@@ -172,8 +177,10 @@ int mtk_display_init(void)
 			lanes = 4;
 		}
 
+		dsi_mode_flags = mipi_dsi_flags;
+
 		if (mtk_dsi_init(mipi_dsi_flags, MIPI_DSI_FMT_RGB888, lanes, &edid,
-				 mipi_data ? mipi_data->init : NULL) < 0) {
+				 mipi_data ? mipi_data->init : NULL, ready_mutex) < 0) {
 			printk(BIOS_ERR, "%s: Failed in DSI init\n", __func__);
 			return -1;
 		}
@@ -217,6 +224,14 @@ int mtk_display_init(void)
 		display_logo(panel, fb_addr, &edid, panel->disp_path);
 
 	return 0;
+}
+
+int mtk_mipi_panel_poweroff(void)
+{
+	if (!mipi_data)
+		return 0;
+
+	return mtk_dsi_panel_poweroff(dsi_mode_flags, mipi_data->poweroff);
 }
 
 u32 mtk_get_vrefresh(const struct edid *edid)

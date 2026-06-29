@@ -3,6 +3,11 @@
 #ifndef SOUTHBRIDGE_INTEL_LYNXPOINT_CHIP_H
 #define SOUTHBRIDGE_INTEL_LYNXPOINT_CHIP_H
 
+/* Temporary, to make it easier to unify LPT and WPT */
+#if CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT)
+#include <southbridge/intel/wildcatpoint/chip.h>
+#else
+
 #include <stdint.h>
 
 struct southbridge_intel_lynxpoint_config {
@@ -40,6 +45,7 @@ struct southbridge_intel_lynxpoint_config {
 
 	/* SATA configuration */
 	uint8_t sata_port_map;
+	uint8_t sata_hotplug_map;
 	uint32_t sata_port0_gen3_tx;
 	uint32_t sata_port1_gen3_tx;
 	uint32_t sata_port0_gen3_dtle;
@@ -90,5 +96,10 @@ struct southbridge_intel_lynxpoint_config {
 	/* Information for the ACPI FADT. */
 	bool docking_supported;
 };
+
+/* Temporary, to make it easier to unify LPT and WPT */
+typedef struct southbridge_intel_lynxpoint_config pch_config_t;
+
+#endif	/* CONFIG(SOUTHBRIDGE_INTEL_WILDCATPOINT) */
 
 #endif	/* SOUTHBRIDGE_INTEL_LYNXPOINT_CHIP_H */

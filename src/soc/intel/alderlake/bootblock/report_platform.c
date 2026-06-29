@@ -54,7 +54,6 @@ static struct {
 	{ PCI_DID_INTEL_ADL_P_ID_6, "Alderlake-P" },
 	{ PCI_DID_INTEL_ADL_P_ID_7, "Alderlake-P" },
 	{ PCI_DID_INTEL_ADL_P_ID_8, "Alderlake-P" },
-	{ PCI_DID_INTEL_ADL_P_ID_9, "Alderlake-P" },
 	{ PCI_DID_INTEL_ADL_P_ID_10, "Alderlake-P" },
 	{ PCI_DID_INTEL_ADL_M_ID_1, "Alderlake-M" },
 	{ PCI_DID_INTEL_ADL_M_ID_2, "Alderlake-M" },
@@ -105,6 +104,7 @@ static struct {
 	{ PCI_DID_INTEL_RPL_S_ID_3, "Raptorlake-S (8+8)" },
 	{ PCI_DID_INTEL_RPL_S_ID_4, "Raptorlake-S (6+8)" },
 	{ PCI_DID_INTEL_RPL_S_ID_5, "Raptorlake-S (6+4)" },
+	{ PCI_DID_INTEL_RPL_S_ID_6, "Raptorlake-S (8+12)" },
 };
 
 static struct {

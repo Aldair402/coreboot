@@ -150,9 +150,9 @@ static const struct pad_config gpio_table[] = {
 	/* GPP_D03:     NC */
 	PAD_NC(GPP_D03, NONE),
 	/* GPP_D05:     ISH_UART0_ECAIC_RXD */
-	PAD_CFG_NF(GPP_D05, NONE, DEEP, NF2),
+	PAD_NC(GPP_D05, NONE),
 	/* GPP_D06:     ISH_UART0_ECAIC_TXD */
-	PAD_CFG_NF(GPP_D06, NONE, DEEP, NF2),
+	PAD_NC(GPP_D06, NONE),
 	/* GPP_D07:     NC */
 	PAD_NC(GPP_D07, NONE),
 	/* GPP_D08:     NC */
@@ -187,8 +187,8 @@ static const struct pad_config gpio_table[] = {
 	PAD_NC(GPP_E05, NONE),
 	/* GPP_E06:     NC */
 	PAD_NC(GPP_E06, NONE),
-	/* GPP_E07:     LAN_PCIE_WAKE_ODL */
-	PAD_CFG_GPI_SCI_LOW_LOCK(GPP_E07, NONE, EDGE_SINGLE, LOCK_CONFIG),
+	/* GPP_E07:     WIFI_WAKE_N */
+	PAD_CFG_GPI_SCI_LOW(GPP_E07, NONE, DEEP, LEVEL),
 	/* GPP_E08:     EC_SOC_INT_ODL */
 	PAD_CFG_GPI_APIC_LOCK(GPP_E08, NONE, LEVEL, INVERT, LOCK_CONFIG),
 	/* GPP_E09:     USB_FP_CONN_1_CONN_2_OC0_N */
@@ -238,7 +238,7 @@ static const struct pad_config gpio_table[] = {
 	/* GPP_F07:     NC */
 	PAD_NC(GPP_F07, NONE),
 	/* GPP_F08:     TCH_PNL1_PWR_EN */
-	PAD_CFG_GPO(GPP_F08, 1, PLTRST),
+	PAD_NC(GPP_F08, NONE),
 	/* GPP_F09:     M2_UFS_RST_N */
 	PAD_CFG_GPO(GPP_F09, 1, DEEP),
 	/* GPP_F10:     ISH_ACCEL_MB_INT_L */

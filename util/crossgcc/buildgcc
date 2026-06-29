@@ -38,19 +38,19 @@ COREBOOT_MIRROR_URL="https://www.coreboot.org/releases/crossgcc-sources"
 # Math libraries (GCC dependencies)
 GMP_VERSION=6.3.0
 MPFR_VERSION=4.2.2
-MPC_VERSION=1.3.1
+MPC_VERSION=1.4.1
 # Core GCC components
-GCC_VERSION=14.2.0
-BINUTILS_VERSION=2.45
+GCC_VERSION=15.2.0
+BINUTILS_VERSION=2.46.1
 LIBSTDCXX_VERSION="${GCC_VERSION}"	# GCC-specific C++ library
 
 # Low-level Tools (built after GCC)
-NASM_VERSION=2.16.03	# x86 assembly
-IASL_VERSION=20250807	# ACPI compiler
+NASM_VERSION=3.01	# x86 assembly
+IASL_VERSION=20251212	# ACPI compiler
 
 # Clang/LLVM Toolchain (alternative to GCC, built separately)
 CLANG_VERSION=21.1.8
-CMAKE_VERSION=4.0.3	# Required for building Clang
+CMAKE_VERSION=4.3.4	# Required for building Clang
 
 # Architecture-specific options
 RISCV_ISA_SPEC=20191213
@@ -58,7 +58,7 @@ RISCV_ISA_SPEC=20191213
 # Filename for each package
 GMP_ARCHIVE="gmp-${GMP_VERSION}.tar.xz"
 MPFR_ARCHIVE="mpfr-${MPFR_VERSION}.tar.xz"
-MPC_ARCHIVE="mpc-${MPC_VERSION}.tar.gz"
+MPC_ARCHIVE="mpc-${MPC_VERSION}.tar.xz"
 GCC_ARCHIVE="gcc-${GCC_VERSION}.tar.xz"
 LIBSTDCXX_ARCHIVE="${GCC_ARCHIVE}"
 BINUTILS_ARCHIVE="binutils-${BINUTILS_VERSION}.tar.xz"
@@ -87,7 +87,7 @@ MPC_BASE_URL="https://ftpmirror.gnu.org/mpc"
 GCC_BASE_URL="https://ftpmirror.gnu.org/gcc/gcc-${GCC_VERSION}"
 LIBSTDCXX_BASE_URL="${GCC_BASE_URL}"
 BINUTILS_BASE_URL="https://ftpmirror.gnu.org/binutils"
-IASL_BASE_URL="https://downloadmirror.intel.com/864114"
+IASL_BASE_URL="https://github.com/acpica/acpica/releases/download/${IASL_VERSION}"
 # CLANG toolchain archive locations
 LLVM_BASE_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${CLANG_VERSION}"
 CLANG_BASE_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${CLANG_VERSION}"

@@ -3,10 +3,15 @@
 config BOARD_GOOGLE_BLUEY_COMMON
 	def_bool n
 	select COMMON_CBFS_SPI_WRAPPER
+	select ELOG
+	# FIXME: keep ADB for development phase
+	select GBB_FLAG_ENABLE_ADB if VBOOT
 	select MAINBOARD_HAS_CHROMEOS
+	select SOC_QUALCOMM_PCIE_ASYNCHRONOUS_INIT
 	select SPI_FLASH
 	select SPI_FLASH_FORCE_4_BYTE_ADDR_MODE
 	select SPI_FLASH_INCLUDE_ALL_DRIVERS
+	select QC_SKIP_SOC_DEBUG_FEATURES_IN_RECOVERY
 
 config BOARD_GOOGLE_BASEBOARD_BLUEY
 	def_bool n
@@ -16,8 +21,10 @@ config BOARD_GOOGLE_MODEL_BLUEY
 	def_bool n
 	select BOARD_GOOGLE_BASEBOARD_BLUEY
 	select BOARD_ROMSIZE_KB_65536
+	select FW_CONFIG
 	select MAINBOARD_HAS_FINGERPRINT_VIA_USB
 	select MISSING_BOARD_RESET
+	select SOC_QUALCOMM_CDT
 
 config BOARD_GOOGLE_BLUEY
 	select BOARD_GOOGLE_MODEL_BLUEY
@@ -31,19 +38,26 @@ config BOARD_GOOGLE_MODEL_QUENBI
 	def_bool n
 	select BOARD_GOOGLE_BASEBOARD_BLUEY
 	select BOARD_ROMSIZE_KB_32768
+	select DAP_USE_SMB2
 	select EC_GOOGLE_CHROMEEC_BATTERY_SOC_DYNAMIC
+	select HAVE_DEBUG_ACCESS_PORT_SOURCE_SINK
+	select MAINBOARD_HAS_CAMERA_VIA_USB
 	select MAINBOARD_HAS_CHROME_EC
 	select MAINBOARD_HAS_FINGERPRINT_VIA_SPI
 	select MAINBOARD_HAS_GOOGLE_TPM
+	select SPI_FREQ_75MHZ
 
 config BOARD_GOOGLE_MODEL_QUARTZ
 	def_bool n
 	select BOARD_GOOGLE_BASEBOARD_BLUEY
 	select BOARD_ROMSIZE_KB_32768
 	select EC_GOOGLE_CHROMEEC_BATTERY_SOC_DYNAMIC
+	select EC_GOOGLE_CHROMEEC_LED_CONTROL
+	select MAINBOARD_HAS_CAMERA_VIA_USB
 	select MAINBOARD_HAS_CHROME_EC
-	select MAINBOARD_HAS_FINGERPRINT_VIA_SPI
+	select MAINBOARD_HAS_FINGERPRINT_VIA_USB
 	select MAINBOARD_HAS_GOOGLE_TPM
+	select SPI_FREQ_75MHZ
 
 config BOARD_GOOGLE_QUENBI
 	select BOARD_GOOGLE_MODEL_QUENBI
@@ -55,6 +69,9 @@ config BOARD_GOOGLE_QUENBIH
 
 config BOARD_GOOGLE_QUARTZ
 	select BOARD_GOOGLE_MODEL_QUARTZ
+	select DAM_SINK_SENSOR_Z1_OPTIMIZATION
+	select DAP_USE_SMB1
+	select HAVE_DEBUG_ACCESS_PORT_SOURCE_SINK
 	select SOC_QUALCOMM_HAMOA
 	select MAINBOARD_HAS_PS8820_RETIMER
 	select MAINBOARD_NO_USB_A_PORT
@@ -64,13 +81,21 @@ config BOARD_GOOGLE_MODEL_MICA
 	def_bool n
 	select BOARD_GOOGLE_BASEBOARD_BLUEY
 	select BOARD_ROMSIZE_KB_32768
+	select EC_GOOGLE_CHROMEEC_LED_CONTROL
 	select EC_GOOGLE_CHROMEEC_BATTERY_SOC_DYNAMIC
+	select MAINBOARD_HAS_BACKLIGHT_PWM
+	select MAINBOARD_HAS_CAMERA_VIA_USB
 	select MAINBOARD_HAS_CHROME_EC
 	select MAINBOARD_HAS_FINGERPRINT_VIA_USB
 	select MAINBOARD_HAS_GOOGLE_TPM
+	select SPI_FREQ_75MHZ
 
 config BOARD_GOOGLE_MICA
 	select BOARD_GOOGLE_MODEL_MICA
+	select DAP_USE_SMB1
+	select HAVE_DEBUG_ACCESS_PORT_SOURCE_SINK
+	select MAINBOARD_HAS_PS8820_RETIMER
+	select MAINBOARD_NO_USB_A_PORT
 	select SOC_QUALCOMM_HAMOA
 
 if BOARD_GOOGLE_BLUEY_COMMON
@@ -123,6 +148,41 @@ config MAINBOARD_SUPPORTS_PARALLEL_CHARGING
 	help
 	  Enable this option if your mainboard supports parallel charging.
 
+config HAVE_DEBUG_ACCESS_PORT_SOURCE_SINK
+	bool
+	default n
+	help
+	  Enable this option to allow source and sink modes on the debug access port.
+
+config DAP_SMB_SLAVE_ID
+	depends on HAVE_DEBUG_ACCESS_PORT_SOURCE_SINK
+	hex
+	default 0x07 if DAP_USE_SMB1
+	default 0x0a if DAP_USE_SMB2
+	help
+	  The Slave ID for the Debug Access Port communication.
+
+config DAP_USE_SMB1
+	depends on HAVE_DEBUG_ACCESS_PORT_SOURCE_SINK
+	bool
+	help
+	  Select this to use SMB1 for DAP.
+
+config DAP_USE_SMB2
+	depends on HAVE_DEBUG_ACCESS_PORT_SOURCE_SINK
+	bool
+	help
+	  Select this to use SMB2 for DAP.
+
+config DAM_SINK_SENSOR_Z1_OPTIMIZATION
+	bool
+	default n
+	help
+	  Enable this option to write the PMIC PSI workaround flag (address 0x7297)
+	  after QCLib loading. This is required for boards that have
+	  the TPD6s3000 protection IC to prevent high power consumption in the
+	  Z1 (off) state.
+
 config MAINBOARD_HAS_GOOGLE_TPM
 	bool
 	default n
@@ -143,12 +203,27 @@ config MAINBOARD_HAS_CHROME_EC
 	help
 	  Enable this option if your mainboard is equipped with Chrome EC.
 
+config MAINBOARD_HAS_BACKLIGHT_PWM
+	bool
+	default n
+	help
+	  Enable this option if your mainboard has PWM control for display
+	  backlight.
+
+config MAINBOARD_HAS_CAMERA_VIA_USB
+	bool
+	default n
+	help
+	  Enable this option if your mainboard's onboard camera
+	  is connected via the USB interface.
+
 config MAINBOARD_VENDOR
 	string
 	default "Google"
 
 config VBOOT
 	select VBOOT_ALWAYS_ENABLE_DISPLAY
+	select VBOOT_LID_SWITCH if MAINBOARD_HAS_CHROME_EC
 	select VBOOT_NO_BOARD_SUPPORT if BOARD_GOOGLE_MODEL_BLUEY
 	select VBOOT_VBNV_FLASH
 
@@ -161,12 +236,14 @@ config MAINBOARD_PART_NUMBER
 	default "Quenbi" if BOARD_GOOGLE_QUENBI
 	default "QuenbiH" if BOARD_GOOGLE_QUENBIH
 	default "Quartz" if BOARD_GOOGLE_MODEL_QUARTZ
+	default "Mica" if BOARD_GOOGLE_MODEL_MICA
 
 config DRIVER_TPM_I2C_BUS
 	depends on I2C_TPM
 	hex
 	default 0xa if BOARD_GOOGLE_MODEL_QUENBI
 	default 0xa if BOARD_GOOGLE_MODEL_QUARTZ
+	default 0xa if BOARD_GOOGLE_MODEL_MICA
 	default 0x10
 
 config DRIVER_TPM_I2C_ADDR
@@ -177,6 +254,7 @@ config EC_GOOGLE_CHROMEEC_SPI_BUS
 	hex
 	default 0xd if BOARD_GOOGLE_MODEL_QUENBI
 	default 0xd if BOARD_GOOGLE_MODEL_QUARTZ
+	default 0xd if BOARD_GOOGLE_MODEL_MICA
 	default 0xb
 
 config MAINBOARD_GPIO_PIN_FOR_TOUCHPAD_POWER
@@ -192,14 +270,27 @@ config MAINBOARD_GPIO_PIN_FOR_GSC_AP_INTERRUPT
 	int
 	default 91 if BOARD_GOOGLE_MODEL_QUENBI
 	default 91 if BOARD_GOOGLE_MODEL_QUARTZ
+	default 91 if BOARD_GOOGLE_MODEL_MICA
 	default 34
 	help
 	  This option specifies the GPIO pin number on the mainboard that is
 	  used for the interrupt line from the Google Security Chip (GSC) to the
 	  Application Processor (AP).
 
+config MAINBOARD_GPIO_PIN_FOR_TOUCHSCREEN_POWER
+	int
+	default 88 if BOARD_GOOGLE_MODEL_MICA
+	default 0
+	help
+	  The GPIO pin number used to enable/disable power to the
+	  touchscreen controller. This varies by board revision.
+	  Set to 0x0 if power is hardwired.
+
 config FMDFILE
 	default "src/mainboard/\$(CONFIG_MAINBOARD_DIR)/chromeos-nogsc.fmd" if BOARD_GOOGLE_MODEL_BLUEY
 	default "src/mainboard/\$(CONFIG_MAINBOARD_DIR)/chromeos.fmd"
+
+config RW_REGION_ONLY
+	default "%/apdp %/apdp_meta %/ramdump %/ramdump_meta" if QC_SKIP_SOC_DEBUG_FEATURES_IN_RECOVERY
 
 endif # BOARD_GOOGLE_BLUEY_COMMON

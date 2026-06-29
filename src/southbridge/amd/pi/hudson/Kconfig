@@ -3,10 +3,7 @@
 config SOUTHBRIDGE_AMD_PI_AVALON
 	bool
 
-config SOUTHBRIDGE_AMD_PI_KERN
-	bool
-
-if SOUTHBRIDGE_AMD_PI_AVALON || SOUTHBRIDGE_AMD_PI_KERN
+if SOUTHBRIDGE_AMD_PI_AVALON
 
 config SOUTHBRIDGE_SPECIFIC_OPTIONS
 	def_bool y
@@ -57,13 +54,6 @@ config HUDSON_IMC_FWM
 	help
 	  Add Hudson 2/3/4 IMC Firmware to support the onboard fan control
 
-config HUDSON_GEC_FWM
-	bool
-	default n
-	help
-	  Add Hudson 2/3/4 GEC Firmware to support the onboard gigabit Ethernet MAC.
-	  Must be connected to a Broadcom B50610 or B50610M PHY on the motherboard.
-
 config HUDSON_PSP
 	bool
 	default y if CPU_AMD_PI_00730F01
@@ -74,19 +64,13 @@ config AMDFW_CONFIG_FILE
 
 config HUDSON_XHCI_FWM_FILE
 	string "XHCI firmware path and filename"
-	default "3rdparty/blobs/southbridge/amd/avalon/xhci.bin" if SOUTHBRIDGE_AMD_PI_AVALON
-	default "3rdparty/blobs/southbridge/amd/kern/xhci.bin" if SOUTHBRIDGE_AMD_PI_KERN
+	default "3rdparty/blobs/southbridge/amd/avalon/xhci.bin"
 	depends on HUDSON_XHCI_FWM
 
 config HUDSON_IMC_FWM_FILE
 	string "IMC firmware path and filename"
-	default "3rdparty/blobs/southbridge/amd/avalon/imc.bin" if SOUTHBRIDGE_AMD_PI_AVALON
-	default "3rdparty/blobs/southbridge/amd/kern/imc.bin" if SOUTHBRIDGE_AMD_PI_KERN
+	default "3rdparty/blobs/southbridge/amd/avalon/imc.bin"
 	depends on HUDSON_IMC_FWM
-
-config HUDSON_GEC_FWM_FILE
-	string "GEC firmware path and filename"
-	depends on HUDSON_GEC_FWM
 
 config AMD_PUBKEY_FILE
 	depends on HUDSON_PSP
@@ -140,13 +124,6 @@ config HUDSON_FADT_8042
 	help
 	  Select if there is an 8042-compatible keyboard controller in the
 	  system.
-
-config AMDFW_OUTSIDE_CBFS
-	def_bool n
-	help
-	  The AMDFW (PSP) is typically locatable in cbfs.  Select this
-	  option to manually attach the generated amdfw.rom at an
-	  offset of 0x20000 from the bottom of the coreboot ROM image.
 
 config SERIRQ_CONTINUOUS_MODE
 	bool

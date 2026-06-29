@@ -7,6 +7,7 @@ verstage-y += vboot_lib.c
 romstage-y += vboot_lib.c
 ramstage-y += vboot_lib.c
 postcar-y += vboot_lib.c
+smm-y += vboot_lib.c
 
 vboot-fixup-includes = $(patsubst -I%,-I$(top)/%,\
 		       $(patsubst -I$(top)/%,-I%,\
@@ -54,6 +55,7 @@ $(eval $(call vboot-for-stage,romstage))
 endif
 $(eval $(call vboot-for-stage,ramstage))
 $(eval $(call vboot-for-stage,postcar))
+$(eval $(call vboot-for-stage,smm))
 
 endif # CONFIG_VBOOT_LIB
 
@@ -267,6 +269,7 @@ GBB_FLAGS := $(call int-add, \
 	$(call bool-to-mask,$(CONFIG_GBB_FLAG_DISABLE_FWMP),0x8000) \
 	$(call bool-to-mask,$(CONFIG_GBB_FLAG_ENABLE_UDC),0x10000) \
 	$(call bool-to-mask,$(CONFIG_GBB_FLAG_FORCE_CSE_SYNC),0x20000) \
+	$(call bool-to-mask,$(CONFIG_GBB_FLAG_ENABLE_ADB),0x80000000) \
 	)
 
 ifneq ($(CONFIG_GBB_BMPFV_FILE),)

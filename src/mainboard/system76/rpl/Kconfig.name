@@ -9,6 +9,9 @@ config BOARD_SYSTEM76_ADDW4
 config BOARD_SYSTEM76_BONW15
 	bool "bonw15"
 
+config BOARD_SYSTEM76_BONW15_B
+	bool "bonw15-b"
+
 config BOARD_SYSTEM76_DARP9
 	bool "darp9"
 
@@ -17,6 +20,9 @@ config BOARD_SYSTEM76_GALP7
 
 config BOARD_SYSTEM76_GAZE18
 	bool "gaze18"
+
+config BOARD_SYSTEM76_GAZE20
+	bool "gaze20"
 
 config BOARD_SYSTEM76_LEMP12
 	bool "lemp12"

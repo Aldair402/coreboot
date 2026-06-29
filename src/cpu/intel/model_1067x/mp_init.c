@@ -30,9 +30,13 @@ static int get_cpu_count(void)
 	return cores;
 }
 
-static void get_microcode_info(const void **microcode, int *parallel)
+static void get_microcode_info(const void **microcode, size_t *size, int *parallel)
 {
-	*microcode = intel_microcode_find();
+	const struct microcode *microcode_file = intel_microcode_find();
+	if (microcode_file != NULL)
+		*size = get_microcode_size(microcode_file);
+
+	*microcode = microcode_file;
 	*parallel = !intel_ht_supported();
 }
 
@@ -43,12 +47,10 @@ static void pre_mp_smm_init(void)
 	smm_initialize();
 }
 
-#define SMRR_SUPPORTED (1 << 11)
-
 static void per_cpu_smm_trigger(void)
 {
 	msr_t mtrr_cap = rdmsr(MTRR_CAP_MSR);
-	if (cpu_has_alternative_smrr() && mtrr_cap.lo & SMRR_SUPPORTED) {
+	if (mtrr_cap.lo & MTRR_CAP_SMRR) {
 		set_feature_ctrl_vmx();
 		msr_t ia32_ft_ctrl = rdmsr(IA32_FEATURE_CONTROL);
 		/* We don't care if the lock is already setting

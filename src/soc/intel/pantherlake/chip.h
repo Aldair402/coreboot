@@ -78,10 +78,6 @@ enum soc_intel_pantherlake_sku {
 	PTL_SKU_6,
 	PTL_SKU_7,
 	WCL_SKU_1,
-	WCL_SKU_2,
-	WCL_SKU_3,
-	WCL_SKU_4,
-	WCL_SKU_5,
 	MAX_PTL_SKUS,
 };
 
@@ -119,10 +115,6 @@ static const struct soc_intel_pantherlake_power_map {
 	{ PCI_DID_INTEL_PTL_H_ID_7, PTL_CORE_4, TDP_25W, PTL_SKU_7, PTL_TDC_4 },
 	{ PCI_DID_INTEL_PTL_H_ID_8, PTL_CORE_3, TDP_25W, PTL_SKU_2, PTL_TDC_3 },
 	{ PCI_DID_INTEL_WCL_ID_1, WCL_CORE, TDP_15W, WCL_SKU_1, WCL_TDC_1 },
-	{ PCI_DID_INTEL_WCL_ID_2, WCL_CORE, TDP_15W, WCL_SKU_2, WCL_TDC_1 },
-	{ PCI_DID_INTEL_WCL_ID_3, WCL_CORE, TDP_15W, WCL_SKU_3, WCL_TDC_1 },
-	{ PCI_DID_INTEL_WCL_ID_4, WCL_CORE, TDP_15W, WCL_SKU_4, WCL_TDC_1 },
-	{ PCI_DID_INTEL_WCL_ID_5, WCL_CORE, TDP_15W, WCL_SKU_5, WCL_TDC_1 },
 };
 
 /* Types of display ports */
@@ -341,7 +333,8 @@ struct soc_intel_pantherlake_config {
 		IGD_SM_0MB = 0x00,
 		IGD_SM_32MB = 0x01,
 		IGD_SM_64MB = 0x02,
-		IGD_SM_128MB = 0x03,
+		IGD_SM_96MB = 0x03,
+		IGD_SM_128MB = 0x04,
 		IGD_SM_4MB = 0xF0,
 		IGD_SM_8MB = 0xF1,
 		IGD_SM_12MB = 0xF2,
@@ -382,18 +375,18 @@ struct soc_intel_pantherlake_config {
 	 * Fast Vmode I_TRIP Thresholds for VR Domains
 	 *
 	 * This two-dimensional array represents the Fast Vmode I_TRIP thresholds
-	 * for various Voltage Regulator (VR) domains across different power limit
-	 * configurations in Panther Lake SoCs.
+	 * for various Voltage Regulator (VR) domains across different SKUs
+	 * in Panther Lake SoCs.
 	 *
 	 * The Fast Vmode I_TRIP threshold is used to override the default current
 	 * threshold settings, ensuring optimal power management by adapting to
-	 * specific VR domain requirements under different power limit scenarios.
+	 * specific VR domain requirements for each SKU's hardware capabilities.
 	 *
 	 * 0-255A in 1/4 A units. Example: 400 = 100A
 	 * This setting overrides the default value set by FSPs when Fast VMode
 	 * is enabled.
 	 */
-	uint16_t fast_vmode_i_trip[PTL_POWER_LIMITS_COUNT][NUM_VR_DOMAINS];
+	uint16_t fast_vmode_i_trip[MAX_PTL_SKUS][NUM_VR_DOMAINS];
 
 	/*
 	 * Power state current threshold 1.
@@ -535,6 +528,12 @@ struct soc_intel_pantherlake_config {
 
 	/* CNVi BT Audio Offload: Enable/Disable BT Audio Offload. */
 	bool cnvi_bt_audio_offload;
+
+	/* UFS Inline Encryption Enable/Disable */
+	bool ufs_inline_encryption;
+
+	/* CNVi WWAN Coexistence Enable/Disable */
+	bool cnvi_wwan_coex;
 
 	/* Debug interface selection */
 	enum {
@@ -761,6 +760,22 @@ struct soc_intel_pantherlake_config {
 
 	/* Disable the progress bar during MRC training operations. */
 	bool disable_progress_bar;
+
+	/*
+	 * VgaInitControl CD Clock Frequency Selection
+	 * 0: CD_CLK_NONE - No higher CD Clock required
+	 * 1: CD_CLK_442MHZ - 441 MHz
+	 * 2: CD_CLK_461MHZ - 461 MHz
+	 */
+	enum cd_clock {
+		CD_CLK_NONE = 0,
+		CD_CLK_442MHZ,
+		CD_CLK_461MHZ,
+		MAX_CD_CLOCK = CD_CLK_461MHZ
+	} vga_cd_clk_freq_sel;
+
+	/* Enable or Disable VCCSA Shutdown */
+	bool vccsa_shutdown;
 };
 
 typedef struct soc_intel_pantherlake_config config_t;

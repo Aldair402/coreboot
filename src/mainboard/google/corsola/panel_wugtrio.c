@@ -1,11 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <baseboard/gpio.h>
+#include <baseboard/panel.h>
 #include <delay.h>
 #include <gpio.h>
 #include <soc/regulator.h>
-
-#include "gpio.h"
-#include "panel.h"
 
 static void mipi_panel_power_on(void)
 {
@@ -46,6 +45,14 @@ static struct panel_description wugtrio_panels[] = {
 		.configure_backlight = backlight_control,
 		.power_on = mipi_panel_power_on,
 		.name = "LCE_LMFBX101117480",
+		.disp_path = DISP_PATH_MIPI,
+		.orientation = LB_FB_ORIENTATION_RIGHT_UP,
+	},
+	/*  TaiGuan Corporation panel with bias IC on it */
+	[10] = {
+		.configure_backlight = backlight_control,
+		.power_on = mipi_panel_power_on,
+		.name = "TG_XTI05101",
 		.disp_path = DISP_PATH_MIPI,
 		.orientation = LB_FB_ORIENTATION_RIGHT_UP,
 	},

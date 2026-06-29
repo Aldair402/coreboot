@@ -2,8 +2,6 @@
 
 Scope (\_SB.PCI0.LPCB)
 {
-	#include "cmos.asl"
-
 	Device (EC)
 	{
 		Name (_HID, EisaId ("PNP0C09"))
@@ -110,6 +108,9 @@ Scope (\_SB.PCI0.LPCB)
 		}
 
 		#include "ac.asl"
+#if CONFIG(EC_STARLABS_MERLIN)
+		#include "shutdown.asl"
+#endif
 #if CONFIG(SYSTEM_TYPE_LAPTOP) || CONFIG(SYSTEM_TYPE_DETACHABLE)
 		#include "battery.asl"
 		#include "lid.asl"

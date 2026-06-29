@@ -6,7 +6,9 @@
 #include <console/console.h>
 #include <delay.h>
 #include <halt.h>
+#include <northbridge/intel/haswell/haswell.h>
 #include <timer.h>
+
 #include "me.h"
 #include "pch.h"
 
@@ -118,7 +120,6 @@ int intel_early_me_init_done(u8 status)
 {
 	u8 reset;
 	int count;
-	u32 mebase_l, mebase_h;
 	union me_hfs hfs;
 	union me_did did = {
 		.init_done = ME_INIT_DONE,
@@ -126,8 +127,8 @@ int intel_early_me_init_done(u8 status)
 	};
 
 	/* MEBASE from MESEG_BASE[35:20] */
-	mebase_l = pci_read_config32(PCI_CPU_DEVICE, PCI_CPU_MEBASE_L);
-	mebase_h = pci_read_config32(PCI_CPU_DEVICE, PCI_CPU_MEBASE_H) & 0xf;
+	const u32 mebase_l = pci_read_config32(HOST_BRIDGE, MESEG_BASE + 0);
+	const u32 mebase_h = pci_read_config32(HOST_BRIDGE, MESEG_BASE + 4) & 0xf;
 	did.uma_base = (mebase_l >> 20) | (mebase_h << 12);
 
 	/* Send message to ME */
@@ -159,9 +160,6 @@ int intel_early_me_init_done(u8 status)
 	printk(BIOS_NOTICE, "ME: Requested BIOS Action: %s\n",
 	       me_ack_values[hfs.ack_data]);
 
-	/* Check status after acknowledgement */
-	intel_early_me_status();
-
 	reset = 0;
 	switch (hfs.ack_data) {
 	case ME_HFS_ACK_CONTINUE:
@@ -190,8 +188,46 @@ int intel_early_me_init_done(u8 status)
 
 	/* Perform the requested reset */
 	if (reset) {
+		/* Show ME status before resetting */
+		intel_early_me_status();
+
 		outb(reset, 0xcf9);
 		halt();
 	}
 	return -1;
+}
+
+void intel_me_hsio_version(uint16_t *version, uint16_t *checksum)
+{
+	int count;
+	u32 hsiover;
+
+	/* Query for HSIO version, overloads H_GS and HFS */
+	pci_write_config32(PCH_ME_DEV, PCI_ME_H_GS,
+			   ME_HSIO_MESSAGE | ME_HSIO_CMD_GETHSIOVER);
+
+	/* Must wait for ME acknowledgement */
+	for (count = ME_RETRY; count > 0; --count) {
+		union me_hfs hfs = { .raw = pci_read_config32(PCH_ME_DEV, PCI_ME_HFS) };
+		if (hfs.bios_msg_ack)
+			break;
+		udelay(ME_DELAY);
+	}
+	if (!count) {
+		printk(BIOS_ERR, "ME failed to respond\n");
+		return;
+	}
+
+	/* HSIO version should be in HFS_5 */
+	hsiover = pci_read_config32(PCH_ME_DEV, PCI_ME_HFS5);
+	*version = hsiover >> 16;
+	*checksum = hsiover & 0xffff;
+
+	printk(BIOS_DEBUG, "ME: HSIO Version            : %d (CRC 0x%04x)\n",
+	       *version, *checksum);
+
+	/* Reset registers to normal behavior */
+	/* TODO: Should this be ME_HSIO_CMD_CLOSE instead? */
+	pci_write_config32(PCH_ME_DEV, PCI_ME_H_GS,
+			   ME_HSIO_MESSAGE | ME_HSIO_CMD_GETHSIOVER);
 }

@@ -78,6 +78,17 @@ chip soc/intel/jasperlake
 	register "tcc_offset" = "8"     # TCC of 97C
 
 	device domain 0 on
+		device ref igpu on
+			chip drivers/gfx/generic
+				register "device_count" = "1"
+				# DDIA for eDP
+				register "device[0].name" = ""LCD0""
+				# Internal panel on the first port of the graphics chip
+				register "device[0].type" = "panel"
+
+				device generic 0 on end
+			end
+		end
 		device ref dptf on
 			# Default DPTF Policy for all Dedede boards if not overridden
 			chip drivers/intel/dptf
@@ -224,6 +235,12 @@ chip soc/intel/jasperlake
 					probe AUDIO_AMP RT1015_I2C
 					probe AUDIO_AMP UNPROVISIONED
 				end
+			end
+		end
+		device ref pcie_rp8 on
+			chip drivers/wifi/generic
+				register "wake" = "GPE0_DW2_03"
+				device pci 00.0 on end
 			end
 		end
 		device ref hda on

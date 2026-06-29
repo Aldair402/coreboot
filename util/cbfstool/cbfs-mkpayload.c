@@ -248,6 +248,11 @@ int parse_fv_to_payload(const struct buffer *input, struct buffer *output,
 
 	DEBUG("start: parse_fv_to_payload\n");
 
+	if (input->size < sizeof(*fv)) {
+		INFO("Too small for a UEFI firmware volume.\n");
+		return -1;
+	}
+
 	fv = (firmware_volume_header_t *)input->data;
 	if (fv->signature != FV_SIGNATURE) {
 		INFO("Not a UEFI firmware volume.\n");
@@ -368,6 +373,10 @@ int parse_fit_to_payload(const struct buffer *input, struct buffer *output,
 	DEBUG("start: parse_fit_to_payload\n");
 
 	fdt_h = buffer_get(input);
+	if (buffer_size(input) < sizeof(*fdt_h)) {
+		INFO("Too small for a FIT payload.\n");
+		return -1;
+	}
 	if (read_be32(&fdt_h->magic) != FDT_HEADER_MAGIC) {
 		INFO("Not a FIT payload.\n");
 		return -1;

@@ -229,16 +229,24 @@ config PLATFORM_HAS_LOW_BATTERY_INDICATOR
 	  This option requires that the system have a display and that the BMP_LOGO option is
 	  enabled.
 
-if PLATFORM_HAS_LOW_BATTERY_INDICATOR
-
-config PLATFORM_LOW_BATTERY_SHUTDOWN_DELAY_SEC
+config PLATFORM_POST_RENDER_DELAY_SEC
 	int
 	default 5
 	help
-	  Delay, in seconds, before system shutdown due to low battery.
-	  This delay allows the user to observe the low-battery indicator.
-	  The default value of 5 seconds aligns with standard user experience (UX) practices.
-	  Platforms may override this value based on specific product requirements.
+	  Delay, in seconds, after rendering a splash screen element.
+	  In low-battery mode, this ensures the warning is visible before shutdown.
+	  In normal modes, this can be used to ensure the display has finished
+	  teardown/synchronization after user notification before passing control
+	  to the OS.
+
+config PLATFORM_HAS_SECONDARY_BOOT_INDICATOR_LOGO
+	bool "Enable alternative (Secondary) resolution for boot indicator"
+	default n
+	help
+	  Select this if your board uses multiple panels with different
+	  resolutions and needs a second set of indicator logos in CBFS.
+
+if PLATFORM_HAS_LOW_BATTERY_INDICATOR
 
 config PLATFORM_HAS_EARLY_LOW_BATTERY_INDICATOR
 	bool "Display low battery indicator in romstage"
@@ -252,7 +260,15 @@ config PLATFORM_HAS_EARLY_LOW_BATTERY_INDICATOR
 config PLATFORM_LOW_BATTERY_INDICATOR_LOGO_PATH
 	string "Path to low battery logo file"
 	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/low_battery.bmp"
-endif
+
+if PLATFORM_HAS_SECONDARY_BOOT_INDICATOR_LOGO
+
+config PLATFORM_LOW_BATTERY_INDICATOR_LOGO_SECONDARY_PATH
+	string "Path to secondary low battery logo"
+	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/low_battery_alt.bmp"
+
+endif # PLATFORM_HAS_SECONDARY_BOOT_INDICATOR_LOGO
+endif # PLATFORM_HAS_LOW_BATTERY_INDICATOR
 
 config SPLASH_SCREEN_FOOTER
 	bool "Enable custom footer on firmware splash screen"
@@ -268,6 +284,74 @@ config SPLASH_SCREEN_FOOTER_LOGO_PATH
 	string "Path to splash screen footer logo file"
 	depends on SPLASH_SCREEN_FOOTER
 	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/logo.bmp"
+
+config PLATFORM_HAS_OFF_MODE_CHARGING_INDICATOR
+	bool "Display off-mode charging indicator"
+	default n
+	depends on BMP_LOGO
+	help
+	  Enable an off-mode charging splash screen to notify the user that
+	  the device is charging. This prevents user confusion when a
+	  device autoboots into a charging state upon the
+	  insertion of a power cable, rather than performing a full OS boot.
+
+	  This feature requires a functional display and depends on the
+	  BMP_LOGO infrastructure to render the charging assets.
+
+if PLATFORM_HAS_OFF_MODE_CHARGING_INDICATOR
+
+config PLATFORM_OFF_MODE_CHARGING_INDICATOR_LOGO_PATH
+	string "Path to off-mode charging logo file"
+	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/off_mode_charging.bmp"
+
+if PLATFORM_HAS_SECONDARY_BOOT_INDICATOR_LOGO
+
+config PLATFORM_OFF_MODE_CHARGING_INDICATOR_LOGO_SECONDARY_PATH
+	string "Path to secondary off-mode charging logo"
+	default "3rdparty/blobs/mainboard/\$(MAINBOARDDIR)/off_mode_charging_alt.bmp"
+
+endif # PLATFORM_HAS_SECONDARY_BOOT_INDICATOR_LOGO
+endif # PLATFORM_HAS_OFF_MODE_CHARGING_INDICATOR
+
+config FRAMEBUFFER_SPLASH_TEXT
+	bool "Enable splash screen text"
+	default n
+	help
+	  Enable logic to render bitmapped text strings directly into
+	  the linear framebuffer during the splash screen stage. This
+	  method uses a bitmapped font table to display system
+	  status messages, such as battery charging levels.
+
+if FRAMEBUFFER_SPLASH_TEXT
+
+choice
+	prompt "Font Selection"
+	default FONT_GOOGLE_SANS_FLEX_MEDIUM_24X32
+
+config FONT_GOOGLE_SANS_FLEX_MEDIUM_24X32
+	bool "Google Sans Flex Medium 24x32"
+	help
+	  Use the Google Sans Medium font table generated from
+	  GoogleSansFlex_24pt-Medium.ttf using `generate_font.py` script.
+	  Dimensions: 24x32 pixels.
+
+endchoice
+
+config FONT_WIDTH
+	int
+	default 24 if FONT_GOOGLE_SANS_FLEX_MEDIUM_24X32
+	default 16
+	help
+	  The width of the font canvas in pixels.
+
+config FONT_HEIGHT
+	int
+	default 32 if FONT_GOOGLE_SANS_FLEX_MEDIUM_24X32
+	default 24
+	help
+	  The height of the font canvas in pixels.
+
+endif # FRAMEBUFFER_SPLASH_TEXT
 
 endmenu
 

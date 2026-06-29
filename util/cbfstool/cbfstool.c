@@ -118,6 +118,15 @@ static struct param {
 	.u64val = -1,
 };
 
+/* Indicates which CBFS is described by an mh_cache. Multiple firmware slots imply multiple
+   hash anchors, necessitating differentiating between them when caching. */
+enum mhc_kind {
+	MHC_NONE,    /* The cache is uninitialized. */
+	MHC_PRIMARY, /* Normal and always-present "COREBOOT" CBFS (separate or embedded
+			bootblock). */
+	MHC_SECONDARY /* Top Swap CBFS called "COREBOOT_B" with bootblock in "BOOTBLOCK_B". */
+};
+
 /*
  * This "metadata_hash cache" caches the value and location of the CBFS metadata
  * hash embedded in the bootblock when CBFS verification is enabled. The first
@@ -132,37 +141,49 @@ struct mh_cache {
 	size_t offset;
 	struct vb2_hash cbfs_hash;
 	platform_fixup_func fixup;
-	bool initialized;
+	enum mhc_kind kind;
 };
 
 static bool is_main_cbfs_region(const char *region_name)
 {
 	return strcmp(region_name, SECTION_NAME_PRIMARY_CBFS) == 0 ||
-		strcmp(region_name, SECTION_NAME_TOPSWAP_CBFS) == 0;
+		strcmp(region_name, SECTION_NAME_SECONDARY_CBFS) == 0;
 }
 
-static bool is_topswap_region(const char *region_name)
+static enum mhc_kind derive_mhc_kind(const char *region_name)
 {
-	return strcmp(region_name, SECTION_NAME_TOPSWAP_CBFS) == 0 ||
-		strcmp(region_name, SECTION_NAME_TOPSWAP) == 0;
+	/* Only these two regions are specific to Top Swap. */
+	if (strcmp(region_name, SECTION_NAME_SECONDARY_CBFS) == 0 ||
+	    strcmp(region_name, SECTION_NAME_BOOTBLOCK_B) == 0)
+		return MHC_SECONDARY;
+
+	return MHC_PRIMARY;
 }
 
 static struct mh_cache *get_mh_cache(void)
 {
 	static struct mh_cache mhc;
 
-	if (mhc.initialized)
+	/*
+	 * A single invocation of cbfstool can process regions that use different CBFS metadata.
+	 * Right now, the only such case is when Top Swap redundancy is in use. Check for Top
+	 * Swap region to decide if the cache can be reused.
+	 *
+	 * This implicitly checks whether the cache is initialized.
+	 */
+	const enum mhc_kind kind = derive_mhc_kind(param.region_name);
+	if (mhc.kind == kind)
 		return &mhc;
 
-	mhc.initialized = true;
+	mhc.kind = kind;
 
 	const struct fmap *fmap = partitioned_file_get_fmap(param.image_file);
 	if (!fmap)
 		goto no_metadata_hash;
 
 	const char *bootblock_region = SECTION_NAME_BOOTBLOCK;
-	if (is_topswap_region(param.region_name))
-		bootblock_region = SECTION_NAME_TOPSWAP;
+	if (kind == MHC_SECONDARY)
+		bootblock_region = SECTION_NAME_BOOTBLOCK_B;
 
 	/* Find the metadata_hash container. If there is a "BOOTBLOCK" FMAP section, it's
 	   there. If not, it's a normal file in the primary CBFS section. */
@@ -175,6 +196,12 @@ static struct mh_cache *get_mh_cache(void)
 		offset = 0;
 		size = buffer.size;
 	} else {
+		if (kind != MHC_PRIMARY) {
+			/* Top Swap requires BOOTBLOCK_B region. */
+			ERROR("Malformed image: '%s' region is missing\n", bootblock_region);
+			goto no_metadata_hash;
+		}
+
 		struct cbfs_image cbfs;
 		struct cbfs_file *mh_container;
 		if (!partitioned_file_read_region(&buffer, param.image_file, SECTION_NAME_PRIMARY_CBFS))
@@ -282,7 +309,7 @@ static int maybe_update_metadata_hash(struct cbfs_image *cbfs)
 static int maybe_update_fmap_hash(void)
 {
 	if (strcmp(param.region_name, SECTION_NAME_BOOTBLOCK) &&
-	    strcmp(param.region_name, SECTION_NAME_TOPSWAP) &&
+	    strcmp(param.region_name, SECTION_NAME_BOOTBLOCK_B) &&
 	    strcmp(param.region_name, SECTION_NAME_FMAP) &&
 	    param.type != CBFS_TYPE_BOOTBLOCK &&
 	    param.type != CBFS_TYPE_AMDFW)
@@ -2379,10 +2406,6 @@ int main(int argc, char **argv)
 		strcpy(region_name_scratch, param.region_name);
 		param.region_name = strtok(region_name_scratch, ",");
 		for (unsigned region = 0; region < num_regions; ++region) {
-			// Reset metadata cache in case region uses anchor from a different
-			// location.
-			get_mh_cache()->initialized = false;
-
 			if (!param.region_name) {
 				ERROR("Encountered illegal degenerate region name in -r list\n");
 				ERROR("The image will be left unmodified.\n");
@@ -2390,7 +2413,8 @@ int main(int argc, char **argv)
 				return 1;
 			}
 
-			if (is_main_cbfs_region(param.region_name))
+			// "COREBOOT" CBFS region is a mandatory one.
+			if (strcmp(param.region_name, SECTION_NAME_PRIMARY_CBFS) == 0)
 				seen_primary_cbfs = true;
 
 			param.image_region = image_regions + region;
